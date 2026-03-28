@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
-namespace Superdev.AspNetCore.Infrastructure.Configuration
+namespace Superdev.AspNetCore.Options
 {
     public class WritableOptions<T> : IWritableOptions<T> where T : class, new()
     {
@@ -81,8 +81,8 @@ namespace Superdev.AspNetCore.Infrastructure.Configuration
             var updatedFileContent = appsettingsJsonObject.ToJsonString(this.jsonSerializerOptions);
             await File.WriteAllTextAsync(appsettingsFilePath, updatedFileContent);
 
-            this.optionsMonitorCache.TryRemove(Options.DefaultName);
-            this.optionsMonitorCache.TryAdd(Options.DefaultName, sectionObject);
+            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
 
             if (this.configuration is IConfigurationRoot configurationRoot)
             {

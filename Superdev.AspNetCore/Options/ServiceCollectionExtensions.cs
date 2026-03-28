@@ -1,4 +1,4 @@
-﻿namespace Superdev.AspNetCore.Infrastructure.Configuration
+﻿namespace Superdev.AspNetCore.Options
 {
     public static class ServiceCollectionExtensions
     {

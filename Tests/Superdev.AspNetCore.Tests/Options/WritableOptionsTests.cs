@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using Superdev.AspNetCore.Infrastructure.Configuration;
+using Superdev.AspNetCore.Options;
 
 namespace Superdev.AspNetCore.Tests.Options
 {

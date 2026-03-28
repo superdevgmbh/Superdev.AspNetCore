@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace Superdev.AspNetCore.Infrastructure.Configuration
+namespace Superdev.AspNetCore.Options
 {
     /// <summary>
     /// Extends the regular IOptions with write operations that persist the configured section back to the

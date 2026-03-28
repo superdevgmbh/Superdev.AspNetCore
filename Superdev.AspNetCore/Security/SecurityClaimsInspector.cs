@@ -1,5 +1,4 @@
-﻿using System.Security.Claims;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 namespace Superdev.AspNetCore.Security
 {

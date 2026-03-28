@@ -1,7 +1,7 @@
 using Asp.Versioning.Conventions;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 
-namespace Superdev.AspNetCore.Infrastructure.Versioning
+namespace Superdev.AspNetCore.Versioning
 {
     /// <summary>
     /// Marks all API controllers which don't define [ApiVersion] attributes as [ApiVersionNeutral].

@@ -2,7 +2,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace Superdev.AspNetCore.Infrastructure.Configuration
+namespace Superdev.AspNetCore.Options
 {
     internal class PropertyUpdater<TEntity, TValue>
     {

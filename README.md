@@ -159,21 +159,6 @@ builder.Services.AddControllers(options =>
 });
 ```
 
-#### Use API version neutral convention
-If you use `Asp.Versioning.Mvc`, this package provides `ApiVersionNeutralConvention`.
-It automatically marks controllers without an explicit `[ApiVersion]` attribute as API-version-neutral.
-
-```csharp
-using Superdev.AspNetCore.Infrastructure.Versioning;
-
-builder.Services
-    .AddApiVersioning()
-    .AddMvc(options =>
-    {
-        options.Conventions.Add(new ApiVersionNeutralConvention());
-    });
-```
-
 ### Design Goals
 - Keep dependencies minimal and explicit.
 - Prefer framework-native ASP.NET Core primitives over large abstraction layers.

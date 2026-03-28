@@ -1,6 +1,5 @@
 using Superdev.AspNetCore.ExceptionHandling;
 using Superdev.AspNetCore.Extensions;
-using Superdev.AspNetCore.Versioning;
 
 namespace Superdev.AspNetCore.Sample
 {
@@ -27,13 +26,6 @@ namespace Superdev.AspNetCore.Sample
 
             // ====== Services ======
             services.UseSuperdev();
-
-            // ====== API Versioning ======
-            services.AddApiVersioning()
-                .AddMvc(options =>
-                {
-                    options.Conventions.Add(new ApiVersionNeutralConvention());
-                });
 
             services.AddOpenApi();
 

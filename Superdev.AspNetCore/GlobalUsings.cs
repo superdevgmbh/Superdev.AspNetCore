@@ -2,7 +2,6 @@
 
 global using System.Diagnostics;
 global using System.Security.Claims;
-global using Asp.Versioning;
 global using Microsoft.AspNetCore.Authorization;
 global using Microsoft.AspNetCore.Hosting;
 global using Microsoft.AspNetCore.Http;

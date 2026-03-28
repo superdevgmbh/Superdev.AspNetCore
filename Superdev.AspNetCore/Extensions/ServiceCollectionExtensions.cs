@@ -1,4 +1,4 @@
-using Superdev.AspNetCore.Infrastructure.Security;
+using Superdev.AspNetCore.Security;
 using Superdev.AspNetCore.Services.SystemAbstractions;
 
 namespace Superdev.AspNetCore.Extensions

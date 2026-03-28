@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Superdev.AspNetCore.Infrastructure.Configuration;
 
-namespace Superdev.AspNetCore.Tests.Infrastructure.Configuration
+namespace Superdev.AspNetCore.Tests.Options
 {
     public class WritableOptionsTests : IDisposable
     {
@@ -75,8 +75,8 @@ namespace Superdev.AspNetCore.Tests.Infrastructure.Configuration
             jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("New");
             jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(9);
 
-            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Options.DefaultName), Times.Once);
-            this.optionsMonitorCacheMock.Verify(x => x.TryAdd(Options.DefaultName, It.Is<TestOptions>(o => o.Name == "New" && o.Count == 9)), Times.Once);
+            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName), Times.Once);
+            this.optionsMonitorCacheMock.Verify(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.Is<TestOptions>(o => o.Name == "New" && o.Count == 9)), Times.Once);
             this.configurationRootMock.Verify(x => x.Reload(), Times.Once);
         }
 
@@ -104,10 +104,10 @@ namespace Superdev.AspNetCore.Tests.Infrastructure.Configuration
             jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Original");
             jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(7);
 
-            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Options.DefaultName), Times.Once);
+            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName), Times.Once);
             this.optionsMonitorCacheMock.Verify(
                 x => x.TryAdd(
-                    Options.DefaultName,
+                    Microsoft.Extensions.Options.Options.DefaultName,
                     It.Is<TestOptions>(o => o.Name == "Original" && o.Count == 7)),
                 Times.Once);
         }

@@ -1,7 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Text.RegularExpressions;
 
-namespace Superdev.AspNetCore.Infrastructure.Security
+namespace Superdev.AspNetCore.Security
 {
     public class SecurityClaimsInspector : ISecurityClaimsInspector
     {

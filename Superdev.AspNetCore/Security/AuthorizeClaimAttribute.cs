@@ -1,4 +1,4 @@
-﻿namespace Superdev.AspNetCore.Infrastructure.Security
+﻿namespace Superdev.AspNetCore.Security
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
     public sealed class AuthorizeClaimAttribute : AuthorizeAttribute

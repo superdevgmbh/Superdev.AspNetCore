@@ -1,7 +1,7 @@
 ﻿using System.Security.Claims;
-using Superdev.AspNetCore.Infrastructure.Security;
+using Superdev.AspNetCore.Security;
 
-namespace Superdev.AspNetCore.Tests.Infrastructure.Security
+namespace Superdev.AspNetCore.Tests.Security
 {
     public class SecurityClaimsInspectorTests
     {

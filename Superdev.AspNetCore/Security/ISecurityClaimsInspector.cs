@@ -1,6 +1,6 @@
 ﻿using System.Security.Claims;
 
-namespace Superdev.AspNetCore.Infrastructure.Security
+namespace Superdev.AspNetCore.Security
 {
     public interface ISecurityClaimsInspector
     {

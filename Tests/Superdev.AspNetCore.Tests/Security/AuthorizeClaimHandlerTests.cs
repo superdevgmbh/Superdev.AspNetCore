@@ -1,8 +1,8 @@
 ﻿using System.Security.Claims;
-using Superdev.AspNetCore.Infrastructure.Security;
+using Superdev.AspNetCore.Security;
 using Superdev.AspNetCore.Tests.Logging;
 
-namespace Superdev.AspNetCore.Tests.Infrastructure.Security
+namespace Superdev.AspNetCore.Tests.Security
 {
     public class AuthorizeClaimHandlerTests
     {

@@ -1,4 +1,4 @@
-﻿namespace Superdev.AspNetCore.Infrastructure.Security
+﻿namespace Superdev.AspNetCore.Security
 {
     public sealed class AuthorizeClaimRequirement : IAuthorizationRequirement
     {

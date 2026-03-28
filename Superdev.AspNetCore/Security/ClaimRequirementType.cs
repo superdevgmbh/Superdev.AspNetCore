@@ -1,4 +1,4 @@
-﻿namespace Superdev.AspNetCore.Infrastructure.Security
+﻿namespace Superdev.AspNetCore.Security
 {
     public enum ClaimRequirementType
     {

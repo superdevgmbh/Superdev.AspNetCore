@@ -1,41 +1,188 @@
 # Superdev.AspNetCore
+[![Version](https://img.shields.io/nuget/v/Superdev.AspNetCore.svg)](https://www.nuget.org/packages/Superdev.AspNetCore) [![Downloads](https://img.shields.io/nuget/dt/Superdev.AspNetCore.svg)](https://www.nuget.org/packages/Superdev.AspNetCore) [![Buy Me a Coffee](https://img.shields.io/badge/support-buy%20me%20a%20coffee-FFDD00)](https://buymeacoffee.com/thomasgalliker)
 
-`Superdev.AspNetCore` is a foundation library for reusable, low-dependency ASP.NET Core services and infrastructure code.
+Superdev.AspNetCore provides reusable, low-dependency building blocks for ASP.NET Core applications.
+It focuses on pragmatic infrastructure code which can be shared across projects.
 
-The goal of this package is to provide pragmatic building blocks that are easy to adopt in modern ASP.NET Core applications without pulling in large framework-specific dependency trees.
+### Download and Install Superdev.AspNetCore
+This library is available on NuGet: https://www.nuget.org/packages/Superdev.AspNetCore
+Use the following command to install Superdev.AspNetCore using NuGet package manager console:
 
-## Goals
+    PM> Install-Package Superdev.AspNetCore
 
-- Keep dependencies minimal and explicit.
-- Support ASP.NET Core on .NET 9, .NET 10, and future versions.
-- Provide reusable services, extensions, and helpers that fit naturally into the standard ASP.NET Core stack.
-- Favor composability, testability, and predictable behavior over hidden magic.
+You can use this library in ASP.NET Core projects compatible to .NET 9 and higher.
 
-## Package Status
+### App Setup
+`tbd`
 
-This repository is currently in its initial package setup phase.
+### API Usage
+The following documentation covers the reusable building blocks that are already available in this package.
 
-The NuGet package metadata, packaging assets, and project structure are in place, while the first reusable components will be added incrementally.
+#### Use claim-based authorization
+`AuthorizeClaimAttribute` allows you to protect endpoints based on the existence or value of claims.
 
-## Installation
+Require a claim to exist:
+```csharp
+using Superdev.AspNetCore.Security;
 
-```bash
-dotnet add package Superdev.AspNetCore
+[AuthorizeClaim("permission")]
+[HttpGet("profile")]
+public IActionResult GetProfile()
+{
+    return this.Ok();
+}
 ```
 
-## Target Frameworks
+Require a specific claim value:
+```csharp
+using Superdev.AspNetCore.Security;
 
-The package currently targets:
+[AuthorizeClaim("permission", "admin")]
+[HttpDelete("{id}")]
+public IActionResult Delete(int id)
+{
+    return this.NoContent();
+}
+```
 
-- `.NET 9`
-- `.NET 10`
+Use more advanced matching with `ClaimRequirementType`:
+```csharp
+using Superdev.AspNetCore.Security;
 
-## Contributing
+[AuthorizeClaim(ClaimRequirementType.Any, "permission", "read", "write")]
+[HttpGet]
+public IActionResult Get()
+{
+    return this.Ok();
+}
+```
 
-Issues and pull requests are welcome at:
+#### Use writable options
+`ConfigureWritable<T>` registers a configuration section as normal options and as `IWritableOptions<T>`.
+`IWritableOptions<T>` can update and persist the section back to `appsettings.json`.
 
-[https://github.com/superdevgmbh/Superdev.AspNetCore](https://github.com/superdevgmbh/Superdev.AspNetCore)
+Register writable options:
+```csharp
+using Superdev.AspNetCore.Infrastructure.Configuration;
 
-## License
+builder.Services.ConfigureWritable<MyFeatureOptions>(
+    builder.Configuration.GetSection("MyFeature"));
+```
 
-This project is licensed under the MIT License.
+Update options at runtime:
+```csharp
+public class MyController : ControllerBase
+{
+    private readonly IWritableOptions<MyFeatureOptions> options;
+
+    public MyController(IWritableOptions<MyFeatureOptions> options)
+    {
+        this.options = options;
+    }
+
+    [HttpPost("enable")]
+    public async Task<IActionResult> EnableAsync()
+    {
+        await this.options.UpdatePropertyAsync(x => x.Enabled, true);
+        return this.Ok();
+    }
+}
+```
+
+> [!WARNING]
+> Writable options modify the configured JSON file on disk. Use this feature intentionally and avoid exposing it through unprotected endpoints.
+
+#### Use system abstractions
+This package contains lightweight abstractions for system services which make business code easier to test.
+
+Inject `IDateTime`:
+```csharp
+using Superdev.AspNetCore.Services.SystemAbstractions;
+
+public class TokenService
+{
+    private readonly IDateTime dateTime;
+
+    public TokenService(IDateTime dateTime)
+    {
+        this.dateTime = dateTime;
+    }
+
+    public DateTime GetExpirationUtc()
+    {
+        return this.dateTime.UtcNow.AddHours(1);
+    }
+}
+```
+
+Inject `IFileSystem`:
+```csharp
+using Superdev.AspNetCore.Services.SystemAbstractions;
+
+public class DocumentService
+{
+    private readonly IFileSystem fileSystem;
+
+    public DocumentService(IFileSystem fileSystem)
+    {
+        this.fileSystem = fileSystem;
+    }
+
+    public Task<string> ReadAsync(string path)
+    {
+        return this.fileSystem.ReadAllTextAsync(path);
+    }
+}
+```
+
+#### Use problem details exception handling
+`ProblemDetailsExceptionHandler` converts unhandled exceptions into RFC-style problem details responses.
+
+Register it in `Program.cs`:
+```csharp
+using Superdev.AspNetCore.ExceptionHandling;
+
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
+
+var app = builder.Build();
+app.UseExceptionHandler();
+```
+
+If you also want MVC/ObjectResult responses with status codes `>= 400` to be normalized to `ProblemDetails`, add `ProblemDetailsResultFilter`:
+```csharp
+using Superdev.AspNetCore.ExceptionHandling;
+
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ProblemDetailsResultFilter>();
+});
+```
+
+#### Use API version neutral convention
+If you use `Asp.Versioning.Mvc`, this package provides `ApiVersionNeutralConvention`.
+It automatically marks controllers without an explicit `[ApiVersion]` attribute as API-version-neutral.
+
+```csharp
+using Superdev.AspNetCore.Infrastructure.Versioning;
+
+builder.Services
+    .AddApiVersioning()
+    .AddMvc(options =>
+    {
+        options.Conventions.Add(new ApiVersionNeutralConvention());
+    });
+```
+
+### Design Goals
+- Keep dependencies minimal and explicit.
+- Prefer framework-native ASP.NET Core primitives over large abstraction layers.
+- Move only code that is broadly reusable across multiple projects.
+- Keep application-specific controllers, DTOs, mappings, secrets and business rules outside this package.
+
+### Contribution
+Contributors welcome! If you find a bug or you want to propose a new feature, feel free to do so by opening a new issue on github.com.
+
+### Links
+- https://learn.microsoft.com/aspnet/core/fundamentals/error-handling-api
+- https://github.com/dotnet/aspnet-api-versioning

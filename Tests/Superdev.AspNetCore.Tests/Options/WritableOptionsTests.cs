@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+using System.Globalization;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -112,6 +113,64 @@ namespace Superdev.AspNetCore.Tests.Options
                 Times.Once);
         }
 
+        [Fact]
+        public async Task ShouldUpdateSingleComplexPropertyWithoutSerializingWholeObjectGraph()
+        {
+            // Arrange
+            await File.WriteAllTextAsync(this.settingsFilePath,
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "Count": 3,
+                    "AccessPoint": {
+                      "SSID": "old-ssid",
+                      "PSK": "old-psk"
+                    }
+                  }
+                }
+                """);
+
+            this.optionsMonitorMock.Setup(x => x.CurrentValue).Returns(() => new TestOptions
+            {
+                Name = "Current",
+                Count = 1,
+                AccessPoint = new AccessPointSettings
+                {
+                    SSID = "current-ssid",
+                    PSK = "current-psk",
+                },
+                CultureInfo = CultureInfo.InvariantCulture,
+            });
+            this.optionsMonitorMock.Setup(x => x.Get(It.IsAny<string?>())).Returns(() => new TestOptions
+            {
+                Name = "Current",
+                Count = 1,
+                AccessPoint = new AccessPointSettings
+                {
+                    SSID = "current-ssid",
+                    PSK = "current-psk",
+                },
+                CultureInfo = CultureInfo.InvariantCulture,
+            });
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdatePropertyAsync(x => x.AccessPoint, new AccessPointSettings
+            {
+                SSID = "new-ssid",
+                PSK = "new-psk",
+            });
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Original");
+            jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(3);
+            jsonObject["Test"]?["AccessPoint"]?["SSID"]?.GetValue<string>().Should().Be("new-ssid");
+            jsonObject["Test"]?["AccessPoint"]?["PSK"]?.GetValue<string>().Should().Be("new-psk");
+        }
+
         private WritableOptions<TestOptions> CreateWritableOptions()
         {
             return new WritableOptions<TestOptions>(
@@ -134,6 +193,17 @@ namespace Superdev.AspNetCore.Tests.Options
             public string Name { get; set; } = string.Empty;
 
             public int Count { get; set; }
+
+            public AccessPointSettings AccessPoint { get; set; } = new();
+
+            public CultureInfo CultureInfo { get; set; } = CultureInfo.InvariantCulture;
+        }
+
+        public class AccessPointSettings
+        {
+            public string SSID { get; set; } = string.Empty;
+
+            public string PSK { get; set; } = string.Empty;
         }
 
         public void Dispose()

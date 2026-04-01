@@ -46,12 +46,7 @@ namespace Superdev.AspNetCore.Options
         public Task UpdatePropertyAsync<TValue>(Expression<Func<T, TValue>> propertySelector, TValue value)
         {
             var propertyUpdater = PropertyUpdater<T, TValue>.GetPropertyUpdater(() => propertySelector);
-
-            return this.UpdateAsync(options =>
-            {
-                propertyUpdater.UpdateValue(options, value);
-                return options;
-            });
+            return this.UpdatePropertyAsync(propertyUpdater, value);
         }
 
         public Task UpdateAsync(Action<T> options)
@@ -77,6 +72,29 @@ namespace Superdev.AspNetCore.Options
             sectionObject = options(sectionObject);
 
             appsettingsJsonObject[this.section] = this.SerializeSection(sectionObject);
+
+            var updatedFileContent = appsettingsJsonObject.ToJsonString(this.jsonSerializerOptions);
+            await File.WriteAllTextAsync(appsettingsFilePath, updatedFileContent);
+
+            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
+
+            if (this.configuration is IConfigurationRoot configurationRoot)
+            {
+                configurationRoot.Reload();
+            }
+        }
+
+        private async Task UpdatePropertyAsync<TValue>(PropertyUpdater<T, TValue> propertyUpdater, TValue value)
+        {
+            var appsettingsFilePath = this.GetAppsettingsFilePath();
+            var appsettingsJsonObject = await GetJsonContentAsync(appsettingsFilePath);
+            var sectionObject = this.DeserializeSection(appsettingsJsonObject);
+
+            propertyUpdater.UpdateValue(sectionObject, value);
+
+            var sectionJsonObject = GetOrCreateSectionObject(appsettingsJsonObject, this.section);
+            sectionJsonObject[propertyUpdater.Name] = JsonSerializer.SerializeToNode(value, this.jsonSerializerOptions);
 
             var updatedFileContent = appsettingsJsonObject.ToJsonString(this.jsonSerializerOptions);
             await File.WriteAllTextAsync(appsettingsFilePath, updatedFileContent);
@@ -117,14 +135,25 @@ namespace Superdev.AspNetCore.Options
             throw new InvalidOperationException($"Configuration file '{filePath}' must contain a JSON object.");
         }
 
-        private JsonNode SerializeSection(T sectionObject)
+        private static JsonObject GetOrCreateSectionObject(JsonObject rootObject, string sectionName)
         {
-            var serializedNode = JsonSerializer.SerializeToNode(sectionObject, this.jsonSerializerOptions);
-            if (serializedNode is JsonObject jsonObject)
+            if (rootObject.TryGetPropertyValue(sectionName, out var sectionNode))
             {
-                return jsonObject;
+                if (sectionNode is JsonObject existingSectionObject)
+                {
+                    return existingSectionObject;
+                }
+
+                throw new InvalidOperationException($"Configuration section '{sectionName}' must contain a JSON object.");
             }
 
+            var newSectionObject = new JsonObject();
+            rootObject[sectionName] = newSectionObject;
+            return newSectionObject;
+        }
+
+        private JsonNode SerializeSection(T sectionObject)
+        {
             var result = new JsonObject();
 
             foreach (var property in typeof(T).GetProperties().Where(p => p.CanRead && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T)))
@@ -135,14 +164,17 @@ namespace Superdev.AspNetCore.Options
                     continue;
                 }
 
-                result[property.Name] = JsonSerializer.SerializeToNode(propertyValue, this.jsonSerializerOptions);
-            }
-
-            if (serializedNode is JsonArray jsonArray)
-            {
-                for (var i = 0; i < jsonArray.Count; i++)
+                try
                 {
-                    result[i.ToString()] = jsonArray[i]?.DeepClone();
+                    result[property.Name] = JsonSerializer.SerializeToNode(propertyValue, this.jsonSerializerOptions);
+                }
+                catch (JsonException)
+                {
+                    // Skip runtime-only properties that cannot be persisted as configuration.
+                }
+                catch (NotSupportedException)
+                {
+                    // Skip runtime-only properties that cannot be persisted as configuration.
                 }
             }
 

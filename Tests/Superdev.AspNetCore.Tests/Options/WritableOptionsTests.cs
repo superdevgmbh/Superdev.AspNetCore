@@ -171,6 +171,160 @@ namespace Superdev.AspNetCore.Tests.Options
             jsonObject["Test"]?["AccessPoint"]?["PSK"]?.GetValue<string>().Should().Be("new-psk");
         }
 
+        [Fact]
+        public async Task ShouldUpdateScalarPropertyWithoutSerializingWholeObjectGraph()
+        {
+            // Arrange
+            await File.WriteAllTextAsync(this.settingsFilePath,
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "RunSetup": true,
+                    "ButtonMappings": [
+                      {
+                        "Page": "PageA",
+                        "ButtonId": 1,
+                        "GpioPin": 6,
+                        "Default": true
+                      }
+                    ]
+                  }
+                }
+                """);
+
+            this.optionsMonitorMock.Setup(x => x.CurrentValue).Returns(() => new TestOptions
+            {
+                Name = "Current",
+                RunSetup = true,
+                ButtonMappings = new List<ButtonMappingSettings>
+                {
+                    new()
+                    {
+                        Page = "PageA",
+                        ButtonId = 1,
+                        GpioPin = 6,
+                        Default = true,
+                    }
+                },
+                CultureInfo = CultureInfo.InvariantCulture,
+            });
+            this.optionsMonitorMock.Setup(x => x.Get(It.IsAny<string?>())).Returns(() => new TestOptions
+            {
+                Name = "Current",
+                RunSetup = true,
+                ButtonMappings = new List<ButtonMappingSettings>
+                {
+                    new()
+                    {
+                        Page = "PageA",
+                        ButtonId = 1,
+                        GpioPin = 6,
+                        Default = true,
+                    }
+                },
+                CultureInfo = CultureInfo.InvariantCulture,
+            });
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdatePropertyAsync(x => x.RunSetup, false);
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Original");
+            jsonObject["Test"]?["RunSetup"]?.GetValue<bool>().Should().BeFalse();
+            jsonObject["Test"]?["ButtonMappings"]?[0]?["Page"]?.GetValue<string>().Should().Be("PageA");
+        }
+
+        [Fact]
+        public async Task ShouldUpdateCollectionPropertyWithComplexItems()
+        {
+            // Arrange
+            await File.WriteAllTextAsync(this.settingsFilePath,
+                """
+                {
+                  "Test": {
+                    "RunSetup": true,
+                    "ButtonMappings": []
+                  },
+                  "Other": {
+                    "Enabled": true
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+            var buttonMappings = new List<ButtonMappingSettings>
+            {
+                new()
+                {
+                    Page = "MeteoSwissWeatherPage",
+                    ButtonId = 1,
+                    GpioPin = 6,
+                    Default = false,
+                },
+                new()
+                {
+                    Page = "MeteoSwissWeatherStationPage",
+                    ButtonId = 2,
+                    GpioPin = 5,
+                    Default = true,
+                }
+            };
+
+            // Act
+            await sut.UpdatePropertyAsync(x => x.ButtonMappings, buttonMappings);
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Other"]?["Enabled"]?.GetValue<bool>().Should().BeTrue();
+            jsonObject["Test"]?["ButtonMappings"]?.AsArray().Count.Should().Be(2);
+            jsonObject["Test"]?["ButtonMappings"]?[0]?["Page"]?.GetValue<string>().Should().Be("MeteoSwissWeatherPage");
+            jsonObject["Test"]?["ButtonMappings"]?[1]?["Default"]?.GetValue<bool>().Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task ShouldCreateMissingConfigurationFileWhenUpdatingWholeOptions()
+        {
+            // Arrange
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdateAsync(new TestOptions
+            {
+                Name = "Created",
+                RunSetup = true,
+                AccessPoint = new AccessPointSettings
+                {
+                    SSID = "created-ssid",
+                    PSK = "created-psk",
+                },
+                ButtonMappings = new List<ButtonMappingSettings>
+                {
+                    new()
+                    {
+                        Page = "SetupPage",
+                        ButtonId = 3,
+                        GpioPin = 16,
+                        Default = true,
+                    }
+                },
+                CultureInfo = CultureInfo.InvariantCulture,
+            });
+
+            // Assert
+            File.Exists(this.settingsFilePath).Should().BeTrue();
+
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Created");
+            jsonObject["Test"]?["RunSetup"]?.GetValue<bool>().Should().BeTrue();
+            jsonObject["Test"]?["AccessPoint"]?["SSID"]?.GetValue<string>().Should().Be("created-ssid");
+            jsonObject["Test"]?["ButtonMappings"]?[0]?["ButtonId"]?.GetValue<int>().Should().Be(3);
+            jsonObject["Test"]?["CultureInfo"].Should().BeNull();
+        }
+
         private WritableOptions<TestOptions> CreateWritableOptions()
         {
             return new WritableOptions<TestOptions>(
@@ -194,7 +348,11 @@ namespace Superdev.AspNetCore.Tests.Options
 
             public int Count { get; set; }
 
+            public bool RunSetup { get; set; }
+
             public AccessPointSettings AccessPoint { get; set; } = new();
+
+            public ICollection<ButtonMappingSettings> ButtonMappings { get; set; } = new List<ButtonMappingSettings>();
 
             public CultureInfo CultureInfo { get; set; } = CultureInfo.InvariantCulture;
         }
@@ -204,6 +362,17 @@ namespace Superdev.AspNetCore.Tests.Options
             public string SSID { get; set; } = string.Empty;
 
             public string PSK { get; set; } = string.Empty;
+        }
+
+        public class ButtonMappingSettings
+        {
+            public string Page { get; set; } = string.Empty;
+
+            public int ButtonId { get; set; }
+
+            public int GpioPin { get; set; }
+
+            public bool Default { get; set; }
         }
 
         public void Dispose()

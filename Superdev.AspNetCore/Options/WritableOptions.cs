@@ -156,7 +156,12 @@ namespace Superdev.AspNetCore.Options
         {
             var result = new JsonObject();
 
-            foreach (var property in typeof(T).GetProperties().Where(p => p.CanRead && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T)))
+            var propertyInfos = typeof(T).GetProperties();
+            var properties = propertyInfos
+                .Where(p => p.CanRead && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T))
+                .ToArray();
+
+            foreach (var property in properties)
             {
                 var propertyValue = property.GetValue(sectionObject);
                 if (propertyValue == null)

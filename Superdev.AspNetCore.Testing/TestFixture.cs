@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
-namespace FishApp.Api.Tests
+namespace Superdev.AspNetCore.Testing
 {
       public abstract class TestFixture<TProgram> : IDisposable where TProgram : class
     {

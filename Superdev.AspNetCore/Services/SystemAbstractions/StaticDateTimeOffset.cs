@@ -1,4 +1,4 @@
-namespace Superdev.AspNetCore.Services.SystemAbstractions
+namespace Superdev.AspNetCore.Services
 {
     public class StaticDateTimeOffset : IDateTimeOffset
     {

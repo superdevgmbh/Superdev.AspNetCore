@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Superdev.AspNetCore.Services.SystemAbstractions
+namespace Superdev.AspNetCore.Services
 {
     public class FileSystem : IFileSystem
     {

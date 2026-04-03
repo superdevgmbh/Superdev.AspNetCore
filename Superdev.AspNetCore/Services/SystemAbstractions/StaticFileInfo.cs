@@ -1,4 +1,4 @@
-﻿namespace Superdev.AspNetCore.Services.SystemAbstractions
+﻿namespace Superdev.AspNetCore.Services
 {
     [DebuggerDisplay("FileInfo: {this.Name}")]
     public class SystemFileInfo : IFileInfo

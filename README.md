@@ -18,7 +18,9 @@ You can use this library in ASP.NET Core projects compatible to .NET 9 and highe
 ### API Usage
 The following documentation covers the reusable building blocks that are already available in this package.
 
-#### Use claim-based authorization
+#### Security
+
+##### Use claim-based authorization
 `AuthorizeClaimAttribute` allows you to protect endpoints based on the existence or value of claims.
 
 Require a claim to exist:
@@ -57,20 +59,40 @@ public IActionResult Get()
 }
 ```
 
-#### Use writable options
-`ConfigureWritable<T>` registers a configuration section as normal options and as `IWritableOptions<T>`.
-`IWritableOptions<T>` can update and persist the section back to `appsettings.json`.
+#### Options
+
+##### Use writable options
+Use writable options when a configuration section should be available through the regular options pipeline and should also be updateable at runtime.
+
+`ConfigureWritable<T>`:
+- binds the configuration section to the standard options infrastructure
+- registers `IWritableOptions<T>` for the same section
+- persists updates back to `appsettings.json` by default
+
+`IWritableOptions<T>` extends `IOptionsSnapshot<T>`, so you can still read the current value via `Value` or `Get(name)`, and you also get write operations such as `UpdateAsync(...)` and `UpdatePropertyAsync(...)`.
 
 Register writable options:
 ```csharp
-using Superdev.AspNetCore.Infrastructure.Configuration;
+using Superdev.AspNetCore.Options;
 
 builder.Services.ConfigureWritable<MyFeatureOptions>(
     builder.Configuration.GetSection("MyFeature"));
 ```
 
+Use a different file if needed:
+```csharp
+using Superdev.AspNetCore.Options;
+
+builder.Services.ConfigureWritable<MyFeatureOptions>(
+    builder.Configuration.GetSection("MyFeature"),
+    "appsettings.Development.json");
+```
+
 Update options at runtime:
 ```csharp
+using Microsoft.AspNetCore.Mvc;
+using Superdev.AspNetCore.Options;
+
 public class MyController : ControllerBase
 {
     private readonly IWritableOptions<MyFeatureOptions> options;
@@ -89,15 +111,28 @@ public class MyController : ControllerBase
 }
 ```
 
+Update multiple values in one operation:
+```csharp
+await this.options.UpdateAsync(current =>
+{
+    current.Enabled = true;
+    current.RefreshIntervalInMinutes = 5;
+});
+```
+
+Use regular options for read-only scenarios and `IWritableOptions<T>` only where runtime persistence is actually required.
+
 > [!WARNING]
 > Writable options modify the configured JSON file on disk. Use this feature intentionally and avoid exposing it through unprotected endpoints.
 
-#### Use system abstractions
+#### System Abstractions
+
+##### Use system abstractions
 This package contains lightweight abstractions for system services which make business code easier to test.
 
 Inject `IDateTime`:
 ```csharp
-using Superdev.AspNetCore.Services.SystemAbstractions;
+using Superdev.AspNetCore.Services;
 
 public class TokenService
 {
@@ -117,7 +152,7 @@ public class TokenService
 
 Inject `IFileSystem`:
 ```csharp
-using Superdev.AspNetCore.Services.SystemAbstractions;
+using Superdev.AspNetCore.Services;
 
 public class DocumentService
 {
@@ -135,7 +170,9 @@ public class DocumentService
 }
 ```
 
-#### Use problem details exception handling
+#### Exception Handling
+
+##### Use problem details exception handling
 `ProblemDetailsExceptionHandler` converts unhandled exceptions into RFC-style problem details responses.
 
 Register it in `Program.cs`:

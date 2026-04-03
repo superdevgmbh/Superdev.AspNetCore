@@ -61,6 +61,11 @@ namespace Superdev.AspNetCore.Tests.Options
                 }
                 """);
 
+            var sequence = new MockSequence();
+            this.configurationRootMock.InSequence(sequence).Setup(x => x.Reload());
+            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName)).Returns(true);
+            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.IsAny<TestOptions>())).Returns(true);
+
             var writableOptions = this.CreateWritableOptions();
 
             // Act
@@ -95,6 +100,11 @@ namespace Superdev.AspNetCore.Tests.Options
                 }
                 """);
 
+            var sequence = new MockSequence();
+            this.configurationRootMock.InSequence(sequence).Setup(x => x.Reload());
+            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName)).Returns(true);
+            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.IsAny<TestOptions>())).Returns(true);
+
             var sut = this.CreateWritableOptions();
 
             // Act
@@ -111,6 +121,7 @@ namespace Superdev.AspNetCore.Tests.Options
                     Microsoft.Extensions.Options.Options.DefaultName,
                     It.Is<TestOptions>(o => o.Name == "Original" && o.Count == 7)),
                 Times.Once);
+            this.configurationRootMock.Verify(x => x.Reload(), Times.Once);
         }
 
         [Fact]

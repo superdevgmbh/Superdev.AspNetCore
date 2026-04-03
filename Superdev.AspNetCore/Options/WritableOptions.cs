@@ -76,13 +76,13 @@ namespace Superdev.AspNetCore.Options
             var updatedFileContent = appsettingsJsonObject.ToJsonString(this.jsonSerializerOptions);
             await File.WriteAllTextAsync(appsettingsFilePath, updatedFileContent);
 
-            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
-            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
-
             if (this.configuration is IConfigurationRoot configurationRoot)
             {
                 configurationRoot.Reload();
             }
+
+            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
         }
 
         private async Task UpdatePropertyAsync<TValue>(PropertyUpdater<T, TValue> propertyUpdater, TValue value)
@@ -99,13 +99,13 @@ namespace Superdev.AspNetCore.Options
             var updatedFileContent = appsettingsJsonObject.ToJsonString(this.jsonSerializerOptions);
             await File.WriteAllTextAsync(appsettingsFilePath, updatedFileContent);
 
-            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
-            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
-
             if (this.configuration is IConfigurationRoot configurationRoot)
             {
                 configurationRoot.Reload();
             }
+
+            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
         }
 
         private string GetAppsettingsFilePath()

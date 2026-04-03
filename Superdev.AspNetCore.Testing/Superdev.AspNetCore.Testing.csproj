@@ -11,11 +11,11 @@
 
   <!--NuGet package-->
   <PropertyGroup>
-    <Product>Superdev.AspNetCore</Product>
+    <Product>Superdev.AspNetCore.Testing</Product>
     <Description>Reusable, low-dependency building blocks for ASP.NET Core applications.</Description>
     <Version>1.0.0</Version>
     <Authors>Thomas Galliker</Authors>
-    <PackageId>Superdev.AspNetCore</PackageId>
+    <PackageId>Superdev.AspNetCore.Testing</PackageId>
     <PackageTags>aspnetcore;building;blocks;reusable;services</PackageTags>
     <PackageIcon>logo.png</PackageIcon>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -32,6 +32,11 @@
     <EmbedAllSources>true</EmbedAllSources>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Logging\**" />
+    <EmbeddedResource Remove="Logging\**" />
+    <None Remove="Logging\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\README.md" Pack="True" PackagePath="\" />
@@ -45,6 +50,11 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

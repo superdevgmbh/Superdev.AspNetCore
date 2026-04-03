@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.5.33414.496
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11626.88 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{533683F1-B92C-4149-A2AD-6045623BC6D8}"
 EndProject
@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Superdev.AspNetCore.Tests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Superdev.AspNetCore.Sample", "Samples\Superdev.AspNetCore.Sample\Superdev.AspNetCore.Sample.csproj", "{F5301997-E5B4-4706-99AD-6A78C3B16EBF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Superdev.AspNetCore.Testing", "Superdev.AspNetCore.Testing\Superdev.AspNetCore.Testing.csproj", "{820C1A6A-B746-4295-93E2-1F58E9810447}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,10 @@ Global
 		{F5301997-E5B4-4706-99AD-6A78C3B16EBF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F5301997-E5B4-4706-99AD-6A78C3B16EBF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F5301997-E5B4-4706-99AD-6A78C3B16EBF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{820C1A6A-B746-4295-93E2-1F58E9810447}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{820C1A6A-B746-4295-93E2-1F58E9810447}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{820C1A6A-B746-4295-93E2-1F58E9810447}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{820C1A6A-B746-4295-93E2-1F58E9810447}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

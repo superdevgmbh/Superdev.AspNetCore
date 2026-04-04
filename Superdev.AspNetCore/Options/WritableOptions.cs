@@ -1,12 +1,25 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Superdev.AspNetCore.Options
 {
-    public class WritableOptions<T> : IWritableOptions<T> where T : class, new()
+    public sealed class WritableOptions<T> : IWritableOptions<T> where T : class, new()
     {
+        private static readonly JsonReaderOptions JsonReaderOptions = new()
+        {
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+
+        private static readonly JsonWriterOptions JsonWriterOptions = new()
+        {
+            Indented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        };
+
         private readonly IWebHostEnvironment environment;
         private readonly IConfiguration configuration;
         private readonly IOptionsMonitor<T> options;
@@ -14,6 +27,8 @@ namespace Superdev.AspNetCore.Options
         private readonly string section;
         private readonly string appsettingsFileName;
         private readonly JsonSerializerOptions jsonSerializerOptions;
+        private readonly byte[] sectionUtf8;
+        private byte[] currentJsonContent = Array.Empty<byte>();
 
         public WritableOptions(
             IWebHostEnvironment environment,
@@ -29,6 +44,7 @@ namespace Superdev.AspNetCore.Options
             this.optionsMonitorCache = optionsMonitorCache;
             this.section = section;
             this.appsettingsFileName = appsettingsFileName;
+            this.sectionUtf8 = Encoding.UTF8.GetBytes(section);
 
             this.jsonSerializerOptions = new JsonSerializerOptions
             {
@@ -39,16 +55,20 @@ namespace Superdev.AspNetCore.Options
             this.jsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
+        /// <inheritdoc />
         public T Value => this.options.CurrentValue;
 
+        /// <inheritdoc />
         public T Get(string? name) => this.options.Get(name);
 
+        /// <inheritdoc />
         public Task UpdatePropertyAsync<TValue>(Expression<Func<T, TValue>> propertySelector, TValue value)
         {
-            var propertyUpdater = PropertyUpdater<T, TValue>.GetPropertyUpdater(() => propertySelector);
+            var propertyUpdater = PropertyUpdater<T, TValue>.GetPropertyUpdater(propertySelector);
             return this.UpdatePropertyAsync(propertyUpdater, value);
         }
 
+        /// <inheritdoc />
         public Task UpdateAsync(Action<T> options)
         {
             return this.UpdateAsync(t =>
@@ -58,54 +78,45 @@ namespace Superdev.AspNetCore.Options
             });
         }
 
+        /// <inheritdoc />
         public Task UpdateAsync(T options)
         {
             return this.UpdateAsync(_ => options);
         }
 
+        /// <inheritdoc />
         public async Task UpdateAsync(Func<T, T> options)
         {
             var appsettingsFilePath = this.GetAppsettingsFilePath();
-            var appsettingsJsonObject = await GetJsonContentAsync(appsettingsFilePath);
-            var sectionObject = this.DeserializeSection(appsettingsJsonObject);
+            var jsonContent = await this.ReadJsonContentAsync(appsettingsFilePath);
+            var sectionObject = this.DeserializeSection(jsonContent);
 
             sectionObject = options(sectionObject);
 
-            appsettingsJsonObject[this.section] = this.SerializeSection(sectionObject);
-
-            var updatedFileContent = appsettingsJsonObject.ToJsonString(this.jsonSerializerOptions);
-            await File.WriteAllTextAsync(appsettingsFilePath, updatedFileContent);
-
-            if (this.configuration is IConfigurationRoot configurationRoot)
+            var serializedSection = this.SerializeSection(sectionObject);
+            try
             {
-                configurationRoot.Reload();
+                await this.WriteUpdatedJsonAsync(appsettingsFilePath, jsonContent, writer => this.WriteRootObjectWithReplacedSection(writer, serializedSection));
+            }
+            finally
+            {
+                serializedSection.Dispose();
             }
 
-            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
-            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
+            this.RefreshConfiguration(sectionObject);
         }
 
         private async Task UpdatePropertyAsync<TValue>(PropertyUpdater<T, TValue> propertyUpdater, TValue value)
         {
             var appsettingsFilePath = this.GetAppsettingsFilePath();
-            var appsettingsJsonObject = await GetJsonContentAsync(appsettingsFilePath);
-            var sectionObject = this.DeserializeSection(appsettingsJsonObject);
+            var jsonContent = await this.ReadJsonContentAsync(appsettingsFilePath);
+            var sectionObject = this.DeserializeSection(jsonContent);
 
             propertyUpdater.UpdateValue(sectionObject, value);
 
-            var sectionJsonObject = GetOrCreateSectionObject(appsettingsJsonObject, this.section);
-            sectionJsonObject[propertyUpdater.Name] = JsonSerializer.SerializeToNode(value, this.jsonSerializerOptions);
+            await this.WriteUpdatedJsonAsync(appsettingsFilePath, jsonContent, writer => this.WriteRootObjectWithUpdatedProperty(writer, propertyUpdater.Name, value));
 
-            var updatedFileContent = appsettingsJsonObject.ToJsonString(this.jsonSerializerOptions);
-            await File.WriteAllTextAsync(appsettingsFilePath, updatedFileContent);
-
-            if (this.configuration is IConfigurationRoot configurationRoot)
-            {
-                configurationRoot.Reload();
-            }
-
-            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
-            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
+            this.RefreshConfiguration(sectionObject);
         }
 
         private string GetAppsettingsFilePath()
@@ -113,89 +124,218 @@ namespace Superdev.AspNetCore.Options
             return Path.Combine(this.environment.ContentRootPath, this.appsettingsFileName);
         }
 
-        private static async Task<JsonObject> GetJsonContentAsync(string filePath)
+        private async Task<byte[]> ReadJsonContentAsync(string filePath)
         {
             if (!File.Exists(filePath))
             {
-                return new JsonObject();
+                return Array.Empty<byte>();
             }
 
-            var fileContent = await File.ReadAllTextAsync(filePath);
-            if (string.IsNullOrWhiteSpace(fileContent))
-            {
-                return new JsonObject();
-            }
-
-            var jsonNode = JsonNode.Parse(fileContent);
-            if (jsonNode is JsonObject jsonObject)
-            {
-                return jsonObject;
-            }
-
-            throw new InvalidOperationException($"Configuration file '{filePath}' must contain a JSON object.");
+            return await File.ReadAllBytesAsync(filePath);
         }
 
-        private static JsonObject GetOrCreateSectionObject(JsonObject rootObject, string sectionName)
+        private async Task WriteUpdatedJsonAsync(string filePath, byte[] jsonContent, Action<Utf8JsonWriter> writeRootObject)
         {
-            if (rootObject.TryGetPropertyValue(sectionName, out var sectionNode))
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(directory))
             {
-                if (sectionNode is JsonObject existingSectionObject)
-                {
-                    return existingSectionObject;
-                }
-
-                throw new InvalidOperationException($"Configuration section '{sectionName}' must contain a JSON object.");
+                Directory.CreateDirectory(directory);
             }
 
-            var newSectionObject = new JsonObject();
-            rootObject[sectionName] = newSectionObject;
-            return newSectionObject;
+            await using var stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+
+            if (HasUtf8Bom(jsonContent))
+            {
+                await stream.WriteAsync(Encoding.UTF8.GetPreamble());
+            }
+
+            using var writer = new Utf8JsonWriter(stream, JsonWriterOptions);
+            writeRootObject(writer);
+            await writer.FlushAsync();
+            stream.SetLength(stream.Position);
         }
 
-        private JsonNode SerializeSection(T sectionObject)
+        private void WriteRootObjectWithReplacedSection(Utf8JsonWriter writer, JsonDocument serializedSection)
         {
-            var result = new JsonObject();
+            using var root = this.GetRootObjectOrEmpty();
+            writer.WriteStartObject();
 
-            var propertyInfos = typeof(T).GetProperties();
-            var properties = propertyInfos
-                .Where(p => p.CanRead && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T))
-                .ToArray();
-
-            foreach (var property in properties)
+            var isWritten = false;
+            foreach (var element in root.RootElement.EnumerateObject())
             {
-                var propertyValue = property.GetValue(sectionObject);
-                if (propertyValue == null)
+                if (!element.NameEquals(this.sectionUtf8))
                 {
+                    element.WriteTo(writer);
                     continue;
                 }
 
-                try
-                {
-                    result[property.Name] = JsonSerializer.SerializeToNode(propertyValue, this.jsonSerializerOptions);
-                }
-                catch (JsonException)
-                {
-                    // Skip runtime-only properties that cannot be persisted as configuration.
-                }
-                catch (NotSupportedException)
-                {
-                    // Skip runtime-only properties that cannot be persisted as configuration.
-                }
+                writer.WritePropertyName(this.section);
+                serializedSection.RootElement.WriteTo(writer);
+                isWritten = true;
             }
 
-            return result;
+            if (!isWritten)
+            {
+                writer.WritePropertyName(this.section);
+                serializedSection.RootElement.WriteTo(writer);
+            }
+
+            writer.WriteEndObject();
         }
 
-        private T DeserializeSection(JsonObject jsonObject)
+        private void WriteRootObjectWithUpdatedProperty<TValue>(Utf8JsonWriter writer, string propertyName, TValue value)
         {
+            using var root = this.GetRootObjectOrEmpty();
+            writer.WriteStartObject();
+
+            var isSectionWritten = false;
+            foreach (var element in root.RootElement.EnumerateObject())
+            {
+                if (!element.NameEquals(this.sectionUtf8))
+                {
+                    element.WriteTo(writer);
+                    continue;
+                }
+
+                writer.WritePropertyName(this.section);
+                this.WriteSectionObjectWithUpdatedProperty(writer, element.Value, propertyName, value);
+                isSectionWritten = true;
+            }
+
+            if (!isSectionWritten)
+            {
+                writer.WritePropertyName(this.section);
+                writer.WriteStartObject();
+                this.WritePropertyValue(writer, propertyName, value);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private void WriteSectionObjectWithUpdatedProperty<TValue>(Utf8JsonWriter writer, JsonElement sectionElement, string propertyName, TValue value)
+        {
+            if (sectionElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException($"Configuration section '{this.section}' must contain a JSON object.");
+            }
+
+            writer.WriteStartObject();
+
+            var isPropertyWritten = false;
+            foreach (var property in sectionElement.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, propertyName, StringComparison.Ordinal))
+                {
+                    property.WriteTo(writer);
+                    continue;
+                }
+
+                this.WritePropertyValue(writer, propertyName, value);
+                isPropertyWritten = true;
+            }
+
+            if (!isPropertyWritten)
+            {
+                this.WritePropertyValue(writer, propertyName, value);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private void WritePropertyValue<TValue>(Utf8JsonWriter writer, string propertyName, TValue value)
+        {
+            writer.WritePropertyName(propertyName);
+            JsonSerializer.Serialize(writer, value, this.jsonSerializerOptions);
+        }
+
+        private JsonDocument GetRootObjectOrEmpty()
+        {
+            if (this.currentJsonContent.Length == 0)
+            {
+                return JsonDocument.Parse("{}");
+            }
+
+            var utf8Json = RemoveUtf8Bom(this.currentJsonContent);
+            if (utf8Json.Length == 0 || IsOnlyWhitespace(utf8Json))
+            {
+                return JsonDocument.Parse("{}");
+            }
+
+            var reader = new Utf8JsonReader(utf8Json, JsonReaderOptions);
+            var document = JsonDocument.ParseValue(ref reader);
+
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                document.Dispose();
+                throw new InvalidOperationException($"Configuration file '{this.GetAppsettingsFilePath()}' must contain a JSON object.");
+            }
+
+            return document;
+        }
+
+        private JsonDocument SerializeSection(T sectionObject)
+        {
+            var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream))
+            {
+                writer.WriteStartObject();
+
+                var propertyInfos = typeof(T).GetProperties();
+                var properties = propertyInfos
+                    .Where(p => p.CanRead && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T))
+                    .ToArray();
+
+                foreach (var property in properties)
+                {
+                    var propertyValue = property.GetValue(sectionObject);
+                    if (propertyValue == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var serializedProperty = JsonSerializer.SerializeToElement(propertyValue, property.PropertyType, this.jsonSerializerOptions);
+                        writer.WritePropertyName(property.Name);
+                        serializedProperty.WriteTo(writer);
+                    }
+                    catch (JsonException)
+                    {
+                        // Skip runtime-only properties that cannot be persisted as configuration.
+                    }
+                    catch (NotSupportedException)
+                    {
+                        // Skip runtime-only properties that cannot be persisted as configuration.
+                    }
+                }
+
+                writer.WriteEndObject();
+            }
+
+            stream.Position = 0;
+            return JsonDocument.Parse(stream);
+        }
+
+        private T DeserializeSection(byte[] jsonContent)
+        {
+            this.currentJsonContent = jsonContent;
+
             var sectionObject = this.Value;
-            if (!jsonObject.TryGetPropertyValue(this.section, out var sectionNode) || sectionNode == null)
+            using var root = this.GetRootObjectOrEmpty();
+
+            if (!root.RootElement.TryGetProperty(this.section, out var sectionElement))
             {
                 return sectionObject;
             }
 
+            if (sectionElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException($"Configuration section '{this.section}' must contain a JSON object.");
+            }
+
             var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            Flatten(sectionNode, this.section, data);
+            Flatten(sectionElement, this.section, data);
 
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(data)
@@ -205,32 +345,75 @@ namespace Superdev.AspNetCore.Options
             return sectionObject;
         }
 
-        private static void Flatten(JsonNode node, string path, IDictionary<string, string?> data)
+        private void RefreshConfiguration(T sectionObject)
         {
-            switch (node)
+            if (this.configuration is IConfigurationRoot configurationRoot)
             {
-                case JsonObject jsonObject:
-                    foreach (var property in jsonObject)
+                configurationRoot.Reload();
+            }
+
+            this.optionsMonitorCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+            this.optionsMonitorCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, sectionObject);
+        }
+
+        private static void Flatten(JsonElement element, string path, IDictionary<string, string?> data)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in element.EnumerateObject())
                     {
-                        if (property.Value != null)
-                        {
-                            Flatten(property.Value, $"{path}:{property.Key}", data);
-                        }
+                        Flatten(property.Value, $"{path}:{property.Name}", data);
                     }
                     break;
-                case JsonArray jsonArray:
-                    for (var i = 0; i < jsonArray.Count; i++)
+                case JsonValueKind.Array:
+                    var index = 0;
+                    foreach (var item in element.EnumerateArray())
                     {
-                        if (jsonArray[i] != null)
-                        {
-                            Flatten(jsonArray[i]!, $"{path}:{i}", data);
-                        }
+                        Flatten(item, $"{path}:{index}", data);
+                        index++;
                     }
                     break;
-                case JsonValue jsonValue:
-                    data[path] = jsonValue.ToString();
+                case JsonValueKind.String:
+                    data[path] = element.GetString();
+                    break;
+                case JsonValueKind.Number:
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                case JsonValueKind.Null:
+                    data[path] = element.ToString();
                     break;
             }
         }
+
+        private static bool HasUtf8Bom(byte[] content)
+        {
+            return content.Length >= Encoding.UTF8.Preamble.Length &&
+                   content.AsMemory(0, Encoding.UTF8.Preamble.Length).Span.SequenceEqual(Encoding.UTF8.Preamble);
+        }
+
+        private static ReadOnlySpan<byte> RemoveUtf8Bom(byte[] content)
+        {
+            if (!HasUtf8Bom(content))
+            {
+                return content;
+            }
+
+            return content.AsSpan(Encoding.UTF8.Preamble.Length);
+        }
+
+        private static bool IsOnlyWhitespace(ReadOnlySpan<byte> utf8Json)
+        {
+            foreach (var b in utf8Json)
+            {
+                if (!char.IsWhiteSpace((char)b))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
     }
 }

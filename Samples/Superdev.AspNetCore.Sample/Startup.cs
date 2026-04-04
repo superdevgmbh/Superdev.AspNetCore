@@ -1,5 +1,7 @@
 using Superdev.AspNetCore.ExceptionHandling;
 using Superdev.AspNetCore.Extensions;
+using Superdev.AspNetCore.Options;
+using Superdev.AspNetCore.Sample.Options;
 
 namespace Superdev.AspNetCore.Sample
 {
@@ -26,6 +28,7 @@ namespace Superdev.AspNetCore.Sample
 
             // ====== Services ======
             services.UseSuperdev();
+            services.ConfigureWritable<TestOptions>(this.Configuration.GetSection("Test"));
 
             services.AddOpenApi();
 

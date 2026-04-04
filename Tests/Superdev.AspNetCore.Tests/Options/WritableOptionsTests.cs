@@ -1,4 +1,7 @@
 using System.Globalization;
+using System.Linq.Expressions;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -7,6 +10,7 @@ using Superdev.AspNetCore.Options;
 
 namespace Superdev.AspNetCore.Tests.Options
 {
+    [Trait("Category", "UnitTests")]
     public class WritableOptionsTests : IDisposable
     {
         private readonly string tempDirectory;
@@ -28,16 +32,8 @@ namespace Superdev.AspNetCore.Tests.Options
             this.configurationRootMock = new Mock<IConfigurationRoot>();
 
             this.optionsMonitorMock = new Mock<IOptionsMonitor<TestOptions>>();
-            this.optionsMonitorMock.Setup(x => x.CurrentValue).Returns(() => new TestOptions
-            {
-                Name = "Current",
-                Count = 1,
-            });
-            this.optionsMonitorMock.Setup(x => x.Get(It.IsAny<string?>())).Returns(() => new TestOptions
-            {
-                Name = "Current",
-                Count = 1,
-            });
+            this.optionsMonitorMock.Setup(x => x.CurrentValue).Returns(() => this.CreateCurrentOptions());
+            this.optionsMonitorMock.Setup(x => x.Get(It.IsAny<string?>())).Returns(() => this.CreateCurrentOptions());
 
             this.optionsMonitorCacheMock = new Mock<IOptionsMonitorCache<TestOptions>>();
             this.optionsMonitorCacheMock.Setup(x => x.TryRemove(It.IsAny<string>())).Returns(true);
@@ -45,10 +41,10 @@ namespace Superdev.AspNetCore.Tests.Options
         }
 
         [Fact]
-        public async Task ShouldReplaceConfiguredSectionWhenUpdatingWholeOptions()
+        public async Task UpdateAsync_WhenReplacingWholeSection_PreservesOtherSections()
         {
             // Arrange
-            await File.WriteAllTextAsync(this.settingsFilePath,
+            await this.WriteSettingsAsync(
                 """
                 {
                   "Test": {
@@ -61,15 +57,10 @@ namespace Superdev.AspNetCore.Tests.Options
                 }
                 """);
 
-            var sequence = new MockSequence();
-            this.configurationRootMock.InSequence(sequence).Setup(x => x.Reload());
-            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName)).Returns(true);
-            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.IsAny<TestOptions>())).Returns(true);
-
-            var writableOptions = this.CreateWritableOptions();
+            var sut = this.CreateWritableOptions();
 
             // Act
-            await writableOptions.UpdateAsync(new TestOptions
+            await sut.UpdateAsync(new TestOptions
             {
                 Name = "New",
                 Count = 9,
@@ -80,17 +71,14 @@ namespace Superdev.AspNetCore.Tests.Options
             jsonObject["Other"]?["Enabled"]?.GetValue<bool>().Should().BeTrue();
             jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("New");
             jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(9);
-
-            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName), Times.Once);
-            this.optionsMonitorCacheMock.Verify(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.Is<TestOptions>(o => o.Name == "New" && o.Count == 9)), Times.Once);
-            this.configurationRootMock.Verify(x => x.Reload(), Times.Once);
+            this.VerifyReloadAndCacheRefresh(Times.Once());
         }
 
         [Fact]
-        public async Task ShouldUpdateSinglePropertyAndPreserveRemainingValues()
+        public async Task UpdatePropertyAsync_WhenUpdatingScalarProperty_PreservesRemainingValues()
         {
             // Arrange
-            await File.WriteAllTextAsync(this.settingsFilePath,
+            await this.WriteSettingsAsync(
                 """
                 {
                   "Test": {
@@ -99,11 +87,6 @@ namespace Superdev.AspNetCore.Tests.Options
                   }
                 }
                 """);
-
-            var sequence = new MockSequence();
-            this.configurationRootMock.InSequence(sequence).Setup(x => x.Reload());
-            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName)).Returns(true);
-            this.optionsMonitorCacheMock.InSequence(sequence).Setup(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.IsAny<TestOptions>())).Returns(true);
 
             var sut = this.CreateWritableOptions();
 
@@ -114,8 +97,6 @@ namespace Superdev.AspNetCore.Tests.Options
             var jsonObject = await this.ReadSettingsFileAsync();
             jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Original");
             jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(7);
-
-            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName), Times.Once);
             this.optionsMonitorCacheMock.Verify(
                 x => x.TryAdd(
                     Microsoft.Extensions.Options.Options.DefaultName,
@@ -125,10 +106,37 @@ namespace Superdev.AspNetCore.Tests.Options
         }
 
         [Fact]
-        public async Task ShouldUpdateSingleComplexPropertyWithoutSerializingWholeObjectGraph()
+        public async Task UpdatePropertyAsync_WhenUpdatingSectionProperty_PreservesUnrelatedSections()
         {
             // Arrange
-            await File.WriteAllTextAsync(this.settingsFilePath,
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "Count": 3
+                  },
+                  "Other": {
+                    "Enabled": true
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdatePropertyAsync(x => x.Count, 7);
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Other"]?["Enabled"]?.GetValue<bool>().Should().BeTrue();
+            jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(7);
+        }
+
+        [Fact]
+        public async Task UpdatePropertyAsync_WhenUpdatingComplexProperty_DoesNotRewriteSiblingValues()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
                 """
                 {
                   "Test": {
@@ -141,29 +149,6 @@ namespace Superdev.AspNetCore.Tests.Options
                   }
                 }
                 """);
-
-            this.optionsMonitorMock.Setup(x => x.CurrentValue).Returns(() => new TestOptions
-            {
-                Name = "Current",
-                Count = 1,
-                AccessPoint = new AccessPointSettings
-                {
-                    SSID = "current-ssid",
-                    PSK = "current-psk",
-                },
-                CultureInfo = CultureInfo.InvariantCulture,
-            });
-            this.optionsMonitorMock.Setup(x => x.Get(It.IsAny<string?>())).Returns(() => new TestOptions
-            {
-                Name = "Current",
-                Count = 1,
-                AccessPoint = new AccessPointSettings
-                {
-                    SSID = "current-ssid",
-                    PSK = "current-psk",
-                },
-                CultureInfo = CultureInfo.InvariantCulture,
-            });
 
             var sut = this.CreateWritableOptions();
 
@@ -183,10 +168,10 @@ namespace Superdev.AspNetCore.Tests.Options
         }
 
         [Fact]
-        public async Task ShouldUpdateScalarPropertyWithoutSerializingWholeObjectGraph()
+        public async Task UpdatePropertyAsync_WhenUpdatingScalarValue_DoesNotRewriteCollections()
         {
             // Arrange
-            await File.WriteAllTextAsync(this.settingsFilePath,
+            await this.WriteSettingsAsync(
                 """
                 {
                   "Test": {
@@ -204,39 +189,6 @@ namespace Superdev.AspNetCore.Tests.Options
                 }
                 """);
 
-            this.optionsMonitorMock.Setup(x => x.CurrentValue).Returns(() => new TestOptions
-            {
-                Name = "Current",
-                RunSetup = true,
-                ButtonMappings = new List<ButtonMappingSettings>
-                {
-                    new()
-                    {
-                        Page = "PageA",
-                        ButtonId = 1,
-                        GpioPin = 6,
-                        Default = true,
-                    }
-                },
-                CultureInfo = CultureInfo.InvariantCulture,
-            });
-            this.optionsMonitorMock.Setup(x => x.Get(It.IsAny<string?>())).Returns(() => new TestOptions
-            {
-                Name = "Current",
-                RunSetup = true,
-                ButtonMappings = new List<ButtonMappingSettings>
-                {
-                    new()
-                    {
-                        Page = "PageA",
-                        ButtonId = 1,
-                        GpioPin = 6,
-                        Default = true,
-                    }
-                },
-                CultureInfo = CultureInfo.InvariantCulture,
-            });
-
             var sut = this.CreateWritableOptions();
 
             // Act
@@ -250,10 +202,10 @@ namespace Superdev.AspNetCore.Tests.Options
         }
 
         [Fact]
-        public async Task ShouldUpdateCollectionPropertyWithComplexItems()
+        public async Task UpdatePropertyAsync_WhenUpdatingCollection_WritesComplexItems()
         {
             // Arrange
-            await File.WriteAllTextAsync(this.settingsFilePath,
+            await this.WriteSettingsAsync(
                 """
                 {
                   "Test": {
@@ -297,7 +249,7 @@ namespace Superdev.AspNetCore.Tests.Options
         }
 
         [Fact]
-        public async Task ShouldCreateMissingConfigurationFileWhenUpdatingWholeOptions()
+        public async Task UpdateAsync_WhenFileIsMissing_CreatesConfigurationFile()
         {
             // Arrange
             var sut = this.CreateWritableOptions();
@@ -327,13 +279,305 @@ namespace Superdev.AspNetCore.Tests.Options
 
             // Assert
             File.Exists(this.settingsFilePath).Should().BeTrue();
-
             var jsonObject = await this.ReadSettingsFileAsync();
             jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Created");
             jsonObject["Test"]?["RunSetup"]?.GetValue<bool>().Should().BeTrue();
             jsonObject["Test"]?["AccessPoint"]?["SSID"]?.GetValue<string>().Should().Be("created-ssid");
             jsonObject["Test"]?["ButtonMappings"]?[0]?["ButtonId"]?.GetValue<int>().Should().Be(3);
             jsonObject["Test"]?["CultureInfo"].Should().BeNull();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenFileIsEmpty_TreatsContentAsEmptyJsonObject()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(string.Empty);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdateAsync(new TestOptions
+            {
+                Name = "Created",
+                Count = 11,
+            });
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Created");
+            jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(11);
+        }
+
+        [Theory]
+        [MemberData(nameof(TolerantJsonInputs))]
+        public async Task UpdateAsync_WhenJsonUsesTolerantFormatting_ParsesAndWritesSuccessfully(string fileContent, Encoding? encoding)
+        {
+            // Arrange
+            await this.WriteSettingsAsync(fileContent, encoding);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdateAsync(new TestOptions
+            {
+                Name = "Updated",
+                Count = 42,
+            });
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Updated");
+            jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(42);
+            jsonObject["Other"]?["Enabled"]?.GetValue<bool>().Should().BeTrue();
+        }
+
+        [Theory]
+        [MemberData(nameof(TolerantJsonInputs))]
+        public async Task UpdatePropertyAsync_WhenJsonUsesTolerantFormatting_ParsesAndWritesSuccessfully(string fileContent, Encoding? encoding)
+        {
+            // Arrange
+            await this.WriteSettingsAsync(fileContent, encoding);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdatePropertyAsync(x => x.Count, 8);
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(8);
+            jsonObject["Other"]?["Enabled"]?.GetValue<bool>().Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenRootJsonIsNotAnObject_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                [
+                  {
+                    "Name": "Wrong"
+                  }
+                ]
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            var act = () => sut.UpdateAsync(new TestOptions { Name = "Updated" });
+
+            // Assert
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage($"Configuration file '{this.settingsFilePath}' must contain a JSON object.");
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenConfiguredSectionIsNotAnObject_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": true
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            var act = () => sut.UpdateAsync(new TestOptions { Name = "Updated" });
+
+            // Assert
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Configuration section 'Test' must contain a JSON object.");
+        }
+
+        [Fact]
+        public async Task UpdatePropertyAsync_WhenConfiguredSectionIsNotAnObject_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": true
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            var act = () => sut.UpdatePropertyAsync(x => x.Count, 5);
+
+            // Assert
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Configuration section 'Test' must contain a JSON object.");
+        }
+
+        [Fact]
+        public async Task UpdatePropertyAsync_WhenValueIsNull_WritesJsonNull()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "AccessPoint": {
+                      "SSID": "old-ssid",
+                      "PSK": "old-psk"
+                    }
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act
+            await sut.UpdatePropertyAsync(x => x.AccessPoint, null!);
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["AccessPoint"]?.GetValueKind().Should().Be(JsonValueKind.Null);
+        }
+
+        [Fact]
+        public async Task UpdatePropertyAsync_WhenSelectorTargetsNestedProperty_RejectsExpression()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "AccessPoint": {
+                      "SSID": "old-ssid",
+                      "PSK": "old-psk"
+                    }
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+            Expression<Func<TestOptions, string>> selector = x => x.AccessPoint!.SSID;
+
+            // Act
+            var act = () => sut.UpdatePropertyAsync(selector, "new-ssid");
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithParameterName("propertySelector")
+                .WithMessage("Only direct top-level properties are supported.*");
+        }
+
+        [Fact]
+        public async Task UpdatePropertyAsync_WhenSelectorIsNotPropertyAccess_RejectsExpression()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "Count": 3
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+            Expression<Func<TestOptions, int>> selector = x => x.Count + 1;
+
+            // Act
+            var act = () => sut.UpdatePropertyAsync(selector, 7);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithParameterName("propertySelector")
+                .WithMessage("The property selector must target a direct property access.*");
+        }
+
+        public static IEnumerable<object?[]> TolerantJsonInputs()
+        {
+            yield return
+            [
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "Count": 3
+                  },
+                  "Other": {
+                    "Enabled": true
+                  }
+                }
+                """,
+                null
+            ];
+
+            yield return
+            [
+                """
+                {
+                  // Line comment
+                  "Test": {
+                    "Name": "Original",
+                    "Count": 3
+                  },
+                  "Other": {
+                    "Enabled": true
+                  }
+                }
+                """,
+                null
+            ];
+
+            yield return
+            [
+                """
+                {
+                  "Test": {
+                    /*
+                      Block comment
+                    */
+                    "Name": "Original",
+                    "Count": 3
+                  },
+                  "Other": {
+                    "Enabled": true
+                  }
+                }
+                """,
+                null
+            ];
+
+            yield return
+            [
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "Count": 3,
+                  },
+                  "Other": {
+                    "Enabled": true,
+                  },
+                }
+                """,
+                null
+            ];
+
+            yield return
+            [
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "Count": 3
+                  },
+                  "Other": {
+                    "Enabled": true
+                  }
+                }
+                """,
+                new UTF8Encoding(true)
+            ];
         }
 
         private WritableOptions<TestOptions> CreateWritableOptions()
@@ -347,10 +591,49 @@ namespace Superdev.AspNetCore.Tests.Options
                 "appsettings.json");
         }
 
+        private TestOptions CreateCurrentOptions()
+        {
+            return new TestOptions
+            {
+                Name = "Current",
+                Count = 1,
+                RunSetup = true,
+                AccessPoint = new AccessPointSettings
+                {
+                    SSID = "current-ssid",
+                    PSK = "current-psk",
+                },
+                ButtonMappings = new List<ButtonMappingSettings>
+                {
+                    new()
+                    {
+                        Page = "PageA",
+                        ButtonId = 1,
+                        GpioPin = 6,
+                        Default = true,
+                    }
+                },
+                CultureInfo = CultureInfo.InvariantCulture,
+            };
+        }
+
+        private async Task WriteSettingsAsync(string content, Encoding? encoding = null)
+        {
+            encoding ??= new UTF8Encoding(false);
+            await File.WriteAllTextAsync(this.settingsFilePath, content, encoding);
+        }
+
         private async Task<JsonObject> ReadSettingsFileAsync()
         {
             var content = await File.ReadAllTextAsync(this.settingsFilePath);
             return JsonNode.Parse(content)!.AsObject();
+        }
+
+        private void VerifyReloadAndCacheRefresh(Times times)
+        {
+            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName), times);
+            this.optionsMonitorCacheMock.Verify(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.IsAny<TestOptions>()), times);
+            this.configurationRootMock.Verify(x => x.Reload(), times);
         }
 
         public class TestOptions
@@ -361,7 +644,7 @@ namespace Superdev.AspNetCore.Tests.Options
 
             public bool RunSetup { get; set; }
 
-            public AccessPointSettings AccessPoint { get; set; } = new();
+            public AccessPointSettings? AccessPoint { get; set; } = new();
 
             public ICollection<ButtonMappingSettings> ButtonMappings { get; set; } = new List<ButtonMappingSettings>();
 

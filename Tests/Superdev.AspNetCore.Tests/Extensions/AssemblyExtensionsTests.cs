@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using Superdev.AspNetCore.Extensions;
-using VersionHashFormat = Superdev.AspNetCore.Extensions.AssemblyExtensions.VersionHashFormat;
 
 namespace Superdev.AspNetCore.Tests.Extensions
 {

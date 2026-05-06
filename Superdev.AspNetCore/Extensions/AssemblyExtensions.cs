@@ -43,12 +43,5 @@ namespace Superdev.AspNetCore.Extensions
             var hash = version[(hashSeparatorIndex + 1)..];
             return $"{versionPrefix}+{hash[..Math.Min(hash.Length, 7)]}";
         }
-
-        public enum VersionHashFormat
-        {
-            None,
-            Short,
-            Full,
-        }
     }
 }

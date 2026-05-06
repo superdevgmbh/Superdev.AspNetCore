@@ -4,6 +4,7 @@ using Superdev.AspNetCore.Tests.Logging;
 
 namespace Superdev.AspNetCore.Tests.Security
 {
+    [Trait(Traits.Category, Traits.UnitTests)]
     public class AuthorizeClaimHandlerTests
     {
         private readonly Mock<ISecurityClaimsInspector> securityClaimsInspectorMock;

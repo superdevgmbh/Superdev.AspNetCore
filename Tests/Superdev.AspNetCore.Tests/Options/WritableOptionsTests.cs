@@ -10,7 +10,7 @@ using Superdev.AspNetCore.Options;
 
 namespace Superdev.AspNetCore.Tests.Options
 {
-    [Trait("Category", "UnitTests")]
+    [Trait(Traits.Category, Traits.UnitTests)]
     public class WritableOptionsTests : IDisposable
     {
         private readonly string tempDirectory;

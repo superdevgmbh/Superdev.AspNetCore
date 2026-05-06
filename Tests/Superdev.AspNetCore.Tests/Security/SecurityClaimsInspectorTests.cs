@@ -3,6 +3,7 @@ using Superdev.AspNetCore.Security;
 
 namespace Superdev.AspNetCore.Tests.Security
 {
+    [Trait(Traits.Category, Traits.UnitTests)]
     public class SecurityClaimsInspectorTests
     {
         private readonly SecurityClaimsInspector securityClaimsInspector = new();

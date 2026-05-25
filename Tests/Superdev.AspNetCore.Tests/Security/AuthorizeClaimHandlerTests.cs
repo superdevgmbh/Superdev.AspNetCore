@@ -21,7 +21,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public async Task Succeeds_WhenNoAuthorizeClaimAttributesArePresent()
+        public async Task HandleAsync_WhenNoAuthorizeClaimAttributesArePresent_Succeeds()
         {
             // Arrange
             var user = CreateAuthenticatedUser();
@@ -37,7 +37,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public async Task Fails_WhenUserIsUnauthenticated()
+        public async Task HandleAsync_WhenUserIsUnauthenticated_Fails()
         {
             // Arrange
             var user = CreateUnauthenticatedUser();
@@ -54,7 +54,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public async Task Succeeds_WhenAllAuthorizeClaimAttributesAreSatisfied()
+        public async Task HandleAsync_WhenAllAuthorizeClaimAttributesAreSatisfied_Succeeds()
         {
             // Arrange
             var user = CreateAuthenticatedUser(
@@ -76,7 +76,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public async Task Fails_WhenAnyAuthorizeClaimAttributeFails()
+        public async Task HandleAsync_WhenAnyAuthorizeClaimAttributeFails_Fails()
         {
             // Arrange
             var user = CreateAuthenticatedUser(
@@ -102,7 +102,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public async Task Evaluates_All_AuthorizeClaimAttributes_With_AND_Semantics()
+        public async Task HandleAsync_WhenMultipleAuthorizeClaimAttributesArePresent_EvaluatesAllWithAndSemantics()
         {
             // Arrange
             var user = CreateAuthenticatedUser(
@@ -130,7 +130,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public async Task Fails_WhenEndpointIsMissing()
+        public async Task HandleAsync_WhenEndpointIsMissing_Fails()
         {
             // Arrange
             var user = CreateAuthenticatedUser();

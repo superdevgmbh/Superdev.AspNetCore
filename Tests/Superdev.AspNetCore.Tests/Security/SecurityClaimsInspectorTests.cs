@@ -9,7 +9,7 @@ namespace Superdev.AspNetCore.Tests.Security
         private readonly SecurityClaimsInspector securityClaimsInspector = new();
 
         [Fact]
-        public void Exists_ReturnsTrue_WhenClaimExists()
+        public void Satisifies_WhenExistsRequirementAndClaimExists_ReturnsTrue()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -27,7 +27,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Exists_ReturnsFalse_WhenClaimDoesNotExist()
+        public void Satisifies_WhenExistsRequirementAndClaimDoesNotExist_ReturnsFalse()
         {
             // Arrange
             var principal = CreatePrincipal();
@@ -43,7 +43,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Any_ReturnsTrue_WhenAnyRequiredPermissionExists()
+        public void Satisifies_WhenAnyRequirementAndRequiredPermissionExists_ReturnsTrue()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -63,7 +63,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Any_ReturnsFalse_WhenNoRequiredPermissionExists()
+        public void Satisifies_WhenAnyRequirementAndRequiredPermissionDoesNotExist_ReturnsFalse()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -82,7 +82,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void All_ReturnsTrue_WhenAllPermissionsExistAcrossMultipleClaims()
+        public void Satisifies_WhenAllRequirementAndPermissionsExistAcrossMultipleClaims_ReturnsTrue()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -103,7 +103,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void All_ReturnsFalse_WhenOnePermissionIsMissing()
+        public void Satisifies_WhenAllRequirementAndOnePermissionIsMissing_ReturnsFalse()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -123,7 +123,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Deny_OverridesAllOtherPermissions()
+        public void Satisifies_WhenDenyClaimExists_ReturnsFalse()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -143,7 +143,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Crud_All_ReturnsTrue_WhenAllCharsExistInSingleClaim()
+        public void Satisifies_WhenAllRequirementAndCrudCharsExistInSingleClaim_ReturnsTrue()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -163,7 +163,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Crud_Any_ReturnsTrue_WhenAnyCharExists()
+        public void Satisifies_WhenAnyRequirementAndCrudCharExists_ReturnsTrue()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -183,7 +183,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Regex_ReturnsTrue_WhenAnyClaimMatchesPattern()
+        public void Satisifies_WhenRegexPatternRequirementAndClaimMatchesPattern_ReturnsTrue()
         {
             // Arrange
             var principal = CreatePrincipal(
@@ -203,7 +203,7 @@ namespace Superdev.AspNetCore.Tests.Security
         }
 
         [Fact]
-        public void Regex_ReturnsFalse_WhenNoClaimMatchesPattern()
+        public void Satisifies_WhenRegexPatternRequirementAndNoClaimMatchesPattern_ReturnsFalse()
         {
             // Arrange
             var principal = CreatePrincipal(

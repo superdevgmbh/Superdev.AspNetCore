@@ -69,7 +69,7 @@
 - Tests are located in `{ProjectName}.Tests` projects.
 - The naming convention for unit tests is `{ClassName}.Tests`.
 - Use xUnit as test framework.
-- Use FluentAssertions for asserts.
+- Use AwesomeAssertions for asserts.
 - Use Moq, AutoMocker to setup and verify mocks.
 - All unit tests must follow the Arrange-Act-Assert (AAA) pattern.
 - Separate AAA sections with blank lines.

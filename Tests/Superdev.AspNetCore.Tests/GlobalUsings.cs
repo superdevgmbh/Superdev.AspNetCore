@@ -1,6 +1,6 @@
 // Global using directives
 
-global using FluentAssertions;
+global using AwesomeAssertions;
 global using Microsoft.AspNetCore.Authorization;
 global using Microsoft.AspNetCore.Http;
 global using Moq;

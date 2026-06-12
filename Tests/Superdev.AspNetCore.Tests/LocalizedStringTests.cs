@@ -122,6 +122,49 @@ namespace Superdev.AspNetCore.Tests
             stringValue.Should().Be("Title");
         }
 
+        [Fact]
+        public void ShouldGetString_ImplicitOperator_NullReturnsNull()
+        {
+            // Arrange
+            LocalizedString? localizedString = null;
+
+            // Act
+            string? stringValue = localizedString;
+
+            // Assert
+            stringValue.Should().BeNull();
+        }
+
+        [Fact]
+        public void ShouldCreateFromString_ImplicitOperator()
+        {
+            // Arrange
+            const string stringValue = "Fallback title";
+
+            // Act
+            LocalizedString? localizedString = stringValue;
+
+            // Assert
+            localizedString.Should().NotBeNull();
+            localizedString.Should().BeEmpty();
+            localizedString[null].Should().Be("Fallback title");
+            localizedString["en"].Should().Be("Fallback title");
+            localizedString["de-CH"].Should().Be("Fallback title");
+        }
+
+        [Fact]
+        public void ShouldCreateFromString_ImplicitOperator_NullReturnsNull()
+        {
+            // Arrange
+            const string? stringValue = null;
+
+            // Act
+            LocalizedString? localizedString = stringValue;
+
+            // Assert
+            localizedString.Should().BeNull();
+        }
+
 
         [Fact]
         public void ShouldGetString_ArrayIndex_NullReturnsDefault()

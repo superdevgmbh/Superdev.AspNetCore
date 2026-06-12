@@ -120,9 +120,26 @@ namespace Superdev.AspNetCore
         /// <summary>
         /// Converts LocalizedString implicitly to string using the default culture.
         /// </summary>
-        public static implicit operator string?(LocalizedString localizedString)
+        public static implicit operator string?(LocalizedString? localizedString)
         {
-            return localizedString[DefaultCultureName];
+            return localizedString?[DefaultCultureName];
+        }
+
+        /// <summary>
+        /// Converts string implicitly to LocalizedString,
+        /// storing <paramref name="value"/> as culture-independent fallback value.
+        /// </summary>
+        public static implicit operator LocalizedString?(string? value)
+        {
+            if (value == null)
+            {
+                return null;
+            }
+
+            return new LocalizedString
+            {
+                [null] = value
+            };
         }
 
         /// <summary>

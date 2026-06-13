@@ -1,3 +1,4 @@
+using Superdev.AspNetCore.ApplicationModelConventions;
 using Superdev.AspNetCore.ExceptionHandling;
 using Superdev.AspNetCore.Extensions;
 using Superdev.AspNetCore.Options;
@@ -7,8 +8,12 @@ namespace Superdev.AspNetCore.Sample
 {
     public class Startup
     {
+        private readonly IWebHostEnvironment environment;
+
         public Startup(IWebHostEnvironment env)
         {
+            this.environment = env;
+
             var configurationBuilder = new ConfigurationBuilder()
                 .SetBasePath(env.ContentRootPath)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
@@ -34,6 +39,7 @@ namespace Superdev.AspNetCore.Sample
 
             services.AddControllers(options =>
             {
+                options.Conventions.Add(new EnvironmentRestrictedApplicationModelConvention(this.environment));
                 options.Filters.Add<ProblemDetailsResultFilter>();
             });
         }

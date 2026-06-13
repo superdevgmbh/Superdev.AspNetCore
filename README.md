@@ -59,6 +59,54 @@ public IActionResult Get()
 }
 ```
 
+#### Application Model Conventions
+
+##### Restrict endpoints to specific environments
+`EnvironmentRestrictedAttribute` lets you expose a controller or action only in selected ASP.NET Core environments (e.g. `Development`, `Staging`, `Production`). Restricted endpoints are removed from the application model in all other environments, so they are not routed and do not show up in API metadata such as OpenAPI.
+
+Register `EnvironmentRestrictedApplicationModelConvention` once when configuring MVC:
+```csharp
+using Superdev.AspNetCore.ApplicationModelConventions;
+
+builder.Services.AddControllers(options =>
+{
+    options.Conventions.Add(
+        new EnvironmentRestrictedApplicationModelConvention(builder.Environment));
+});
+```
+
+Restrict a whole controller to the development environment:
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using Superdev.AspNetCore.ApplicationModelConventions;
+
+[ApiController]
+[Route("api/[controller]")]
+[EnvironmentRestricted("Development")]
+public class DiagnosticsController : ControllerBase
+{
+    [HttpGet]
+    public IActionResult Get() => this.Ok();
+}
+```
+
+Restrict a single action to multiple environments:
+```csharp
+using Superdev.AspNetCore.ApplicationModelConventions;
+
+[HttpGet("seed")]
+[EnvironmentRestricted("Development", "Staging")]
+public IActionResult Seed()
+{
+    return this.Ok();
+}
+```
+
+Environment names are matched case-insensitively against the names defined by `Microsoft.Extensions.Hosting.Environments`. Because attribute arguments must be compile-time constants, pass them as string literals (or your own `const` values). Controllers and actions without the attribute remain available in every environment.
+
+> [!NOTE]
+> The application model is built once at start-up, so the set of available endpoints reflects the environment at start-up and does not change at runtime.
+
 #### Options
 
 ##### Use writable options

@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Superdev.AspNetCore.ApplicationModelConventions;
 
 namespace Superdev.AspNetCore.Sample.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [EnvironmentRestricted("Development")]
     public class WeatherForecastController : ControllerBase
     {
         private static readonly string[] Summaries =

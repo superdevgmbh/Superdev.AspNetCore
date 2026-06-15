@@ -1,11 +1,15 @@
 using System.Globalization;
 using System.Text.Json;
+using Superdev.AspNetCore.Tests.TestData;
 
 namespace Superdev.AspNetCore.Tests
 {
     [Trait(Traits.Category, Traits.UnitTests)]
     public class LocalizedStringTests : IDisposable
     {
+        private static readonly CultureInfo English = new("en");
+        private static readonly CultureInfo German = new("de");
+
         private readonly ITestOutputHelper testOutputHelper;
 
         public LocalizedStringTests(ITestOutputHelper testOutputHelper)
@@ -446,6 +450,36 @@ namespace Superdev.AspNetCore.Tests
             localizedString.Should().HaveCount(2);
             localizedString.Should().Contain(v => v.Key == "en" && v.Value == "Title");
             localizedString.Should().Contain(v => v.Key == "en-US" && v.Value == "Title (US)");
+        }
+
+        [Fact]
+        public void FromResource_ShouldPopulateValuePerCulture()
+        {
+            // Arrange
+            var cultureInfos = new[] { English, German };
+            const string resourceKey = nameof(Strings.ErrorMessage);
+
+            // Act
+            var localizedString = LocalizedString.FromResource(Strings.ResourceManager, resourceKey, cultureInfos);
+
+            // Assert
+            localizedString.ToString(English).Should().Be(Strings.ResourceManager.GetString(resourceKey, English));
+            localizedString.ToString(German).Should().Be(Strings.ResourceManager.GetString(resourceKey, German));
+            localizedString.ToString(English).Should().NotBe(localizedString.ToString(German));
+        }
+
+        [Fact]
+        public void FromResource_ShouldSkipMissingResourceKey()
+        {
+            // Arrange
+            var cultureInfos = new[] { English, German };
+            const string resourceKey = "NonExistentResourceKey";
+
+            // Act
+            var localizedString = LocalizedString.FromResource(Strings.ResourceManager, resourceKey, cultureInfos);
+
+            // Assert
+            localizedString.Should().BeEmpty();
         }
 
         public class LocalizedStringTestClass

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Resources;
 using System.Text.Json.Serialization;
 
 namespace Superdev.AspNetCore
@@ -140,6 +141,35 @@ namespace Superdev.AspNetCore
             {
                 [null] = value
             };
+        }
+
+        /// <summary>
+        /// Creates <see cref="LocalizedString"/> with the value of <paramref name="resourceKey"/>,
+        /// read from <paramref name="resourceManager"/> for each of the given <paramref name="cultures"/>.
+        /// Cultures whose resource value is missing or empty are skipped.
+        /// </summary>
+        /// <remarks>
+        /// Reading every supported culture up front makes the result culture-stable, so a value built once
+        /// (e.g. at startup) can still be resolved per request via <see cref="LocalizedString.ToString(CultureInfo)"/>.
+        /// </remarks>
+        public static LocalizedString FromResource(ResourceManager resourceManager, string resourceKey, IEnumerable<CultureInfo> cultures)
+        {
+            ArgumentNullException.ThrowIfNull(resourceManager);
+            ArgumentNullException.ThrowIfNull(resourceKey);
+            ArgumentNullException.ThrowIfNull(cultures);
+
+            var localizedString = new LocalizedString();
+
+            foreach (var culture in cultures)
+            {
+                var value = resourceManager.GetString(resourceKey, culture);
+                if (!string.IsNullOrEmpty(value))
+                {
+                    localizedString.Add(culture.Name, value);
+                }
+            }
+
+            return localizedString;
         }
 
         /// <summary>

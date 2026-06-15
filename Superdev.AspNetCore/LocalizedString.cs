@@ -173,6 +173,30 @@ namespace Superdev.AspNetCore
         }
 
         /// <summary>
+        /// Returns the full, lossless representation of this <see cref="LocalizedString"/>:
+        /// all culture entries plus the culture-independent fallback value under the
+        /// <see cref="FallbackJsonPropertyName"/> ("null") key.
+        /// </summary>
+        /// <remarks>
+        /// This is the symmetric counterpart to <see cref="LocalizedString(Dictionary{string,string})"/>
+        /// and mirrors the JSON representation, so the result round-trips without losing the fallback:
+        /// <c>new LocalizedString(localizedString.ToDictionary())</c>.
+        /// Unlike enumerating the instance directly (which omits the fallback), this is the
+        /// representation to map from when converting to or from other <c>LocalizedString</c> types.
+        /// </remarks>
+        public IReadOnlyDictionary<string, string> ToDictionary()
+        {
+            var dictionary = new Dictionary<string, string>(this, StringComparer.OrdinalIgnoreCase);
+
+            if (this.fallbackValue != null)
+            {
+                dictionary[FallbackJsonPropertyName] = this.fallbackValue;
+            }
+
+            return dictionary;
+        }
+
+        /// <summary>
         /// Converts LocalizedString to string using the default culture.
         /// </summary>
         public override string? ToString()

@@ -453,6 +453,65 @@ namespace Superdev.AspNetCore.Tests
         }
 
         [Fact]
+        public void ToDictionary_ShouldReturnCultureEntries()
+        {
+            // Arrange
+            var localizedString = new LocalizedString
+            {
+                ["en"] = "Title",
+                ["de"] = "Titel"
+            };
+
+            // Act
+            var dictionary = localizedString.ToDictionary();
+
+            // Assert
+            dictionary.Should().HaveCount(2);
+            dictionary.Should().Contain(v => v.Key == "en" && v.Value == "Title");
+            dictionary.Should().Contain(v => v.Key == "de" && v.Value == "Titel");
+        }
+
+        [Fact]
+        public void ToDictionary_ShouldIncludeFallbackUnderNullKey()
+        {
+            // Arrange
+            var localizedString = new LocalizedString
+            {
+                ["en"] = "Title",
+                [null] = "Fallback title"
+            };
+
+            // Act
+            var dictionary = localizedString.ToDictionary();
+
+            // Assert
+            dictionary.Should().HaveCount(2);
+            dictionary.Should().Contain(v => v.Key == "en" && v.Value == "Title");
+            dictionary.Should().Contain(v => v.Key == LocalizedString.FallbackJsonPropertyName && v.Value == "Fallback title");
+        }
+
+        [Fact]
+        public void ToDictionary_ShouldRoundTripThroughConstructor()
+        {
+            // Arrange
+            var source = new LocalizedString
+            {
+                ["en"] = "Title",
+                ["de"] = "Titel",
+                [null] = "Fallback title"
+            };
+
+            // Act
+            var destination = new LocalizedString(new Dictionary<string, string>(source.ToDictionary()));
+
+            // Assert
+            destination["en"].Should().Be("Title");
+            destination["de"].Should().Be("Titel");
+            destination[null].Should().Be("Fallback title");
+            destination["fr"].Should().Be("Fallback title");
+        }
+
+        [Fact]
         public void FromResource_ShouldPopulateValuePerCulture()
         {
             // Arrange

@@ -249,6 +249,141 @@ namespace Superdev.AspNetCore.Tests.Options
         }
 
         [Fact]
+        public async Task UpdateAsync_WhenDelegateLeavesCollectionUntouched_DoesNotDuplicateCollectionItems()
+        {
+            // Arrange: the file already contains the same single collection item that the
+            // current options value (IOptionsMonitor.CurrentValue) exposes.
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "ButtonMappings": [
+                      {
+                        "Page": "PageA",
+                        "ButtonId": 1,
+                        "GpioPin": 6,
+                        "Default": true
+                      }
+                    ]
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act: the delegate only mutates a scalar and leaves the collection untouched.
+            await sut.UpdateAsync(o => o.Name = "Updated");
+
+            // Assert: the collection must not be duplicated.
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Updated");
+            jsonObject["Test"]?["ButtonMappings"]?.AsArray().Count.Should().Be(1);
+            jsonObject["Test"]?["ButtonMappings"]?[0]?["Page"]?.GetValue<string>().Should().Be("PageA");
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenAppliedRepeatedly_DoesNotAccumulateCollectionItems()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "ButtonMappings": [
+                      {
+                        "Page": "PageA",
+                        "ButtonId": 1,
+                        "GpioPin": 6,
+                        "Default": true
+                      }
+                    ]
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act: apply several updates that never touch the collection.
+            await sut.UpdateAsync(o => o.Count = 1);
+            await sut.UpdateAsync(o => o.Count = 2);
+            await sut.UpdateAsync(o => o.Count = 3);
+
+            // Assert: the collection size stays stable.
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(3);
+            jsonObject["Test"]?["ButtonMappings"]?.AsArray().Count.Should().Be(1);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenScalarIsAbsentFromFile_PreservesCurrentScalarValue()
+        {
+            // Arrange: the writable file owns only the collection. The RunSetup ("Enabled"-style)
+            // flag is supplied by another configuration source and is therefore present on the
+            // current options value (CreateCurrentOptions -> RunSetup = true) but NOT in the file.
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "ButtonMappings": [
+                      {
+                        "Page": "PageA",
+                        "ButtonId": 1,
+                        "GpioPin": 6,
+                        "Default": true
+                      }
+                    ]
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act: the update only touches the collection and must not affect RunSetup.
+            await sut.UpdateAsync(o => o.ButtonMappings = new List<ButtonMappingSettings>
+            {
+                new ButtonMappingSettings
+                {
+                    Page = "PageA",
+                    ButtonId = 1,
+                    GpioPin = 6,
+                    Default = true
+                },
+            });
+
+            // Assert: the flag must survive; it must not be reset to its default (false).
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["RunSetup"]?.GetValue<bool>().Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenCollectionIsAbsentFromFile_PreservesCurrentCollection()
+        {
+            // Arrange: the file owns only a scalar; the collection is supplied elsewhere and is
+            // therefore present on the current value (CreateCurrentOptions -> one ButtonMapping).
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "Name": "Original"
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act: only the scalar is updated; the collection must be preserved, not emptied.
+            await sut.UpdateAsync(o => o.Name = "Updated");
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Updated");
+            jsonObject["Test"]?["ButtonMappings"]?.AsArray().Count.Should().Be(1);
+            jsonObject["Test"]?["ButtonMappings"]?[0]?["Page"]?.GetValue<string>().Should().Be("PageA");
+        }
+
+        [Fact]
         public async Task UpdateAsync_WhenFileIsMissing_CreatesConfigurationFile()
         {
             // Arrange

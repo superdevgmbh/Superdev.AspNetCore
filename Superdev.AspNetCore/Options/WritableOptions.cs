@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -8,6 +9,10 @@ namespace Superdev.AspNetCore.Options
 {
     public sealed class WritableOptions<T> : IWritableOptions<T> where T : class, new()
     {
+        private static readonly PropertyInfo[] WritableSectionProperties = typeof(T).GetProperties()
+            .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T))
+            .ToArray();
+
         private static readonly JsonReaderOptions JsonReaderOptions = new()
         {
             CommentHandling = JsonCommentHandling.Skip,
@@ -321,11 +326,17 @@ namespace Superdev.AspNetCore.Options
         {
             this.currentJsonContent = jsonContent;
 
-            var sectionObject = this.Value;
+            // Bind onto a fresh instance rather than the shared IOptionsMonitor.CurrentValue:
+            // the configuration binder appends to existing collections/arrays instead of replacing
+            // them, so binding the file's section onto an already-populated value would duplicate
+            // every collection item (and would mutate the cached options instance in place).
+            var sectionObject = new T();
             using var root = this.GetRootObjectOrEmpty();
 
             if (!root.RootElement.TryGetProperty(this.section, out var sectionElement))
             {
+                // Nothing persisted for this section yet: fall back entirely to the current value.
+                this.OverlayCurrentValue(sectionObject, persistedPropertyNames: null);
                 return sectionObject;
             }
 
@@ -342,7 +353,35 @@ namespace Superdev.AspNetCore.Options
                 .Build();
 
             configuration.GetSection(this.section).Bind(sectionObject);
+
+            // The file is authoritative for the properties it specifies (binding above already
+            // applied them). For every other top-level property, overlay the current value so that
+            // settings coming from other configuration sources (environment variables, layered
+            // appsettings files, ...) are preserved instead of being reset to their type default.
+            var persistedPropertyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in sectionElement.EnumerateObject())
+            {
+                persistedPropertyNames.Add(property.Name);
+            }
+
+            this.OverlayCurrentValue(sectionObject, persistedPropertyNames);
             return sectionObject;
+        }
+
+        private void OverlayCurrentValue(T target, ISet<string>? persistedPropertyNames)
+        {
+            T? currentValue = null;
+
+            foreach (var property in WritableSectionProperties)
+            {
+                if (persistedPropertyNames != null && persistedPropertyNames.Contains(property.Name))
+                {
+                    continue;
+                }
+
+                currentValue ??= this.Value;
+                property.SetValue(target, property.GetValue(currentValue));
+            }
         }
 
         private void RefreshConfiguration(T sectionObject)

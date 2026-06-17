@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Superdev.AspNetCore.Options;
+using MicrosoftOptions = Microsoft.Extensions.Options.Options;
 
 namespace Superdev.AspNetCore.Tests.Options
 {
@@ -99,7 +100,7 @@ namespace Superdev.AspNetCore.Tests.Options
             jsonObject["Test"]?["Count"]?.GetValue<int>().Should().Be(7);
             this.optionsMonitorCacheMock.Verify(
                 x => x.TryAdd(
-                    Microsoft.Extensions.Options.Options.DefaultName,
+                    MicrosoftOptions.DefaultName,
                     It.Is<TestOptions>(o => o.Name == "Original" && o.Count == 7)),
                 Times.Once);
             this.configurationRootMock.Verify(x => x.Reload(), Times.Once);
@@ -628,6 +629,78 @@ namespace Superdev.AspNetCore.Tests.Options
                 .WithMessage("The property selector must target a direct property access.*");
         }
 
+        [Fact]
+        public async Task UpdateAsync_WhenFileIsTransientlyLockedByAnotherReader_RetriesUntilSuccess()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "Name": "Original",
+                    "Count": 1
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Simulate the reload-on-change configuration file watcher holding a read handle on the
+            // file (FileShare.Read) at the moment the write begins. Opening the file for writing then
+            // fails with a sharing violation until the reader releases it - which is the intermittent
+            // "being used by another process" IOException observed in the API system tests.
+            var reader = new FileStream(this.settingsFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            // Act
+            var updateTask = sut.UpdateAsync(o => o.Name = "Updated");
+
+            // Hold the reader long enough for the writer to fail its first attempt and enter the retry
+            // loop, then release it well within the retry budget so a subsequent attempt succeeds.
+            await Task.Delay(40);
+            reader.Dispose();
+            await updateTask;
+
+            // Assert
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Name"]?.GetValue<string>().Should().Be("Updated");
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenInvokedConcurrently_SerializesWritesWithoutSharingViolation()
+        {
+            // Arrange
+            await this.WriteSettingsAsync(
+                """
+                {
+                  "Test": {
+                    "Count": 0,
+                    "ButtonMappings": [
+                      {
+                        "Page": "PageA",
+                        "ButtonId": 1,
+                        "GpioPin": 6,
+                        "Default": true
+                      }
+                    ]
+                  }
+                }
+                """);
+
+            var sut = this.CreateWritableOptions();
+
+            // Act: many writers target the same file at once. Without serialization they collide on
+            // the exclusively-opened file stream and throw "being used by another process".
+            var updates = Enumerable.Range(1, 16).Select(i => sut.UpdateAsync(o => o.Count = i));
+            var act = () => Task.WhenAll(updates);
+
+            // Assert
+            await act.Should().NotThrowAsync();
+
+            var jsonObject = await this.ReadSettingsFileAsync();
+            jsonObject["Test"]?["Count"]?.GetValue<int>().Should().BeInRange(1, 16);
+            jsonObject["Test"]?["ButtonMappings"]?.AsArray().Count.Should().Be(1);
+        }
+
         public static IEnumerable<object?[]> TolerantJsonInputs()
         {
             yield return
@@ -766,8 +839,8 @@ namespace Superdev.AspNetCore.Tests.Options
 
         private void VerifyReloadAndCacheRefresh(Times times)
         {
-            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(Microsoft.Extensions.Options.Options.DefaultName), times);
-            this.optionsMonitorCacheMock.Verify(x => x.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, It.IsAny<TestOptions>()), times);
+            this.optionsMonitorCacheMock.Verify(x => x.TryRemove(MicrosoftOptions.DefaultName), times);
+            this.optionsMonitorCacheMock.Verify(x => x.TryAdd(MicrosoftOptions.DefaultName, It.IsAny<TestOptions>()), times);
             this.configurationRootMock.Verify(x => x.Reload(), times);
         }
 

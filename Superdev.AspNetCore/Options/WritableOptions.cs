@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
@@ -10,7 +11,7 @@ namespace Superdev.AspNetCore.Options
     public sealed class WritableOptions<T> : IWritableOptions<T> where T : class, new()
     {
         private static readonly PropertyInfo[] WritableSectionProperties = typeof(T).GetProperties()
-            .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T))
+            .Where(p => p is { CanRead: true, CanWrite: true } && p.GetIndexParameters().Length == 0 && p.DeclaringType == typeof(T))
             .ToArray();
 
         private static readonly JsonReaderOptions JsonReaderOptions = new()
@@ -24,6 +25,11 @@ namespace Superdev.AspNetCore.Options
             Indented = true,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
+
+        // Serializes read-modify-write cycles against the same appsettings file within this process.
+        // Without it, two concurrent updates race on the file handle (and on last-writer-wins section
+        // content). Keyed by file path so unrelated writable files don't contend with each other.
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileLocks = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly IWebHostEnvironment environment;
         private readonly IConfiguration configuration;
@@ -93,40 +99,86 @@ namespace Superdev.AspNetCore.Options
         public async Task UpdateAsync(Func<T, T> options)
         {
             var appsettingsFilePath = this.GetAppsettingsFilePath();
-            var jsonContent = await this.ReadJsonContentAsync(appsettingsFilePath);
-            var sectionObject = this.DeserializeSection(jsonContent);
+            var fileLock = GetFileLock(appsettingsFilePath);
 
-            sectionObject = options(sectionObject);
-
-            var serializedSection = this.SerializeSection(sectionObject);
+            await fileLock.WaitAsync();
             try
             {
-                await this.WriteUpdatedJsonAsync(appsettingsFilePath, jsonContent, writer => this.WriteRootObjectWithReplacedSection(writer, serializedSection));
+                var jsonContent = await this.ReadJsonContentAsync(appsettingsFilePath);
+                var sectionObject = this.DeserializeSection(jsonContent);
+
+                sectionObject = options(sectionObject);
+
+                var serializedSection = this.SerializeSection(sectionObject);
+                try
+                {
+                    await this.WriteUpdatedJsonAsync(appsettingsFilePath, jsonContent, writer => this.WriteRootObjectWithReplacedSection(writer, serializedSection));
+                }
+                finally
+                {
+                    serializedSection.Dispose();
+                }
+
+                this.RefreshConfiguration(sectionObject);
             }
             finally
             {
-                serializedSection.Dispose();
+                fileLock.Release();
             }
-
-            this.RefreshConfiguration(sectionObject);
         }
 
         private async Task UpdatePropertyAsync<TValue>(PropertyUpdater<T, TValue> propertyUpdater, TValue value)
         {
             var appsettingsFilePath = this.GetAppsettingsFilePath();
-            var jsonContent = await this.ReadJsonContentAsync(appsettingsFilePath);
-            var sectionObject = this.DeserializeSection(jsonContent);
+            var fileLock = GetFileLock(appsettingsFilePath);
 
-            propertyUpdater.UpdateValue(sectionObject, value);
+            await fileLock.WaitAsync();
+            try
+            {
+                var jsonContent = await this.ReadJsonContentAsync(appsettingsFilePath);
+                var sectionObject = this.DeserializeSection(jsonContent);
 
-            await this.WriteUpdatedJsonAsync(appsettingsFilePath, jsonContent, writer => this.WriteRootObjectWithUpdatedProperty(writer, propertyUpdater.Name, value));
+                propertyUpdater.UpdateValue(sectionObject, value);
 
-            this.RefreshConfiguration(sectionObject);
+                await this.WriteUpdatedJsonAsync(appsettingsFilePath, jsonContent, writer => this.WriteRootObjectWithUpdatedProperty(writer, propertyUpdater.Name, value));
+
+                this.RefreshConfiguration(sectionObject);
+            }
+            finally
+            {
+                fileLock.Release();
+            }
         }
 
         private string GetAppsettingsFilePath()
         {
             return Path.Combine(this.environment.ContentRootPath, this.appsettingsFileName);
+        }
+
+        private static SemaphoreSlim GetFileLock(string filePath)
+        {
+            return FileLocks.GetOrAdd(filePath, _ => new SemaphoreSlim(1, 1));
+        }
+
+        // The configuration file is also read by the reload-on-change file watcher (and potentially
+        // by other processes), so opening it for writing can transiently fail with a sharing violation
+        // even when no other writer is active. Retry a few times with a short backoff to ride out that
+        // window instead of surfacing the IOException to the caller.
+        private static async Task ExecuteWithRetryAsync(Func<Task> action)
+        {
+            const int maxAttempts = 5;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await action();
+                    return;
+                }
+                catch (Exception ex) when ((ex is IOException || ex is UnauthorizedAccessException) && attempt < maxAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt));
+                }
+            }
         }
 
         private async Task<byte[]> ReadJsonContentAsync(string filePath)
@@ -136,7 +188,9 @@ namespace Superdev.AspNetCore.Options
                 return Array.Empty<byte>();
             }
 
-            return await File.ReadAllBytesAsync(filePath);
+            var content = Array.Empty<byte>();
+            await ExecuteWithRetryAsync(async () => content = await File.ReadAllBytesAsync(filePath));
+            return content;
         }
 
         private async Task WriteUpdatedJsonAsync(string filePath, byte[] jsonContent, Action<Utf8JsonWriter> writeRootObject)
@@ -147,17 +201,20 @@ namespace Superdev.AspNetCore.Options
                 Directory.CreateDirectory(directory);
             }
 
-            await using var stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-
-            if (HasUtf8Bom(jsonContent))
+            await ExecuteWithRetryAsync(async () =>
             {
-                await stream.WriteAsync(Encoding.UTF8.GetPreamble());
-            }
+                await using var stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
 
-            using var writer = new Utf8JsonWriter(stream, JsonWriterOptions);
-            writeRootObject(writer);
-            await writer.FlushAsync();
-            stream.SetLength(stream.Position);
+                if (HasUtf8Bom(jsonContent))
+                {
+                    await stream.WriteAsync(Encoding.UTF8.GetPreamble());
+                }
+
+                await using var writer = new Utf8JsonWriter(stream, JsonWriterOptions);
+                writeRootObject(writer);
+                await writer.FlushAsync();
+                stream.SetLength(stream.Position);
+            });
         }
 
         private void WriteRootObjectWithReplacedSection(Utf8JsonWriter writer, JsonDocument serializedSection)

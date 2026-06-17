@@ -173,6 +173,16 @@ Use regular options for read-only scenarios and `IWritableOptions<T>` only where
 > [!WARNING]
 > Writable options modify the configured JSON file on disk. Use this feature intentionally and avoid exposing it through unprotected endpoints.
 
+#### Concurrency and limitations
+Writable options persist to a JSON file and are meant for occasional configuration changes, not as a high-throughput or transactional data store. Each update rewrites the configured section as a whole, so concurrent updates follow last-writer-wins semantics.
+
+Concurrent writes from within the same process are serialized by an in-process lock keyed by the resolved file path, so they neither corrupt the file nor fail with sharing violations. Writes from other processes or application instances that target the same file are *not* coordinated.
+
+Opening the file for writing can transiently fail with `IOException: ... because it is being used by another process` — most commonly when the same file is registered with `reloadOnChange: true` and its file watcher re-reads the file right after a previous write (other readers such as antivirus or backup agents can cause the same thing). Updates therefore retry a few times with a short backoff (~200 ms total) before surfacing the exception. A file that stays locked for longer than that window will still fail.
+
+> [!NOTE]
+> Writable options already push the updated value into the options cache and reload configuration after each write, so the `reloadOnChange` watcher reload is largely redundant for the writable file. If you do not need external edits to that file to be picked up at runtime, registering it with `reloadOnChange: false` removes the watcher entirely and avoids the transient sharing violations described above.
+
 ### System Abstractions
 
 #### Use system abstractions

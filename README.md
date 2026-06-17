@@ -4,7 +4,7 @@
 Superdev.AspNetCore provides reusable, low-dependency building blocks for ASP.NET Core applications.
 It focuses on pragmatic infrastructure code which can be shared across projects.
 
-### Download and Install Superdev.AspNetCore
+## Download and Install Superdev.AspNetCore
 This library is available on NuGet: https://www.nuget.org/packages/Superdev.AspNetCore
 Use the following command to install Superdev.AspNetCore using NuGet package manager console:
 
@@ -12,15 +12,15 @@ Use the following command to install Superdev.AspNetCore using NuGet package man
 
 You can use this library in ASP.NET Core projects compatible to .NET 9 and higher.
 
-### App Setup
+## App Setup
 `tbd`
 
-### API Usage
+## API Usage
 The following documentation covers the reusable building blocks that are already available in this package.
 
-#### Security
+### Security
 
-##### Use claim-based authorization
+#### Use claim-based authorization
 `AuthorizeClaimAttribute` allows you to protect endpoints based on the existence or value of claims.
 
 Require a claim to exist:
@@ -59,9 +59,9 @@ public IActionResult Get()
 }
 ```
 
-#### Application Model Conventions
+### Application Model Conventions
 
-##### Restrict endpoints to specific environments
+#### Restrict endpoints to specific environments
 `EnvironmentRestrictedAttribute` lets you expose a controller or action only in selected ASP.NET Core environments (e.g. `Development`, `Staging`, `Production`). Restricted endpoints are removed from the application model in all other environments, so they are not routed and do not show up in API metadata such as OpenAPI.
 
 Register `EnvironmentRestrictedApplicationModelConvention` once when configuring MVC:
@@ -107,9 +107,9 @@ Environment names are matched case-insensitively against the names defined by `M
 > [!NOTE]
 > The application model is built once at start-up, so the set of available endpoints reflects the environment at start-up and does not change at runtime.
 
-#### Options
+### Options
 
-##### Use writable options
+#### Use writable options
 Use writable options when a configuration section should be available through the regular options pipeline and should also be updateable at runtime.
 
 `ConfigureWritable<T>`:
@@ -173,9 +173,9 @@ Use regular options for read-only scenarios and `IWritableOptions<T>` only where
 > [!WARNING]
 > Writable options modify the configured JSON file on disk. Use this feature intentionally and avoid exposing it through unprotected endpoints.
 
-#### System Abstractions
+### System Abstractions
 
-##### Use system abstractions
+#### Use system abstractions
 This package contains lightweight abstractions for system services which make business code easier to test.
 
 Inject `IDateTime`:
@@ -218,9 +218,9 @@ public class DocumentService
 }
 ```
 
-#### Exception Handling
+### Exception Handling
 
-##### Use problem details exception handling
+#### Use problem details exception handling
 `ProblemDetailsExceptionHandler` converts unhandled exceptions into RFC-style problem details responses.
 
 Register it in `Program.cs`:
@@ -244,15 +244,15 @@ builder.Services.AddControllers(options =>
 });
 ```
 
-### Design Goals
+## Design Goals
 - Keep dependencies minimal and explicit.
 - Prefer framework-native ASP.NET Core primitives over large abstraction layers.
 - Move only code that is broadly reusable across multiple projects.
 - Keep application-specific controllers, DTOs, mappings, secrets and business rules outside this package.
 
-### Contribution
+## Contribution
 Contributors welcome! If you find a bug or you want to propose a new feature, feel free to do so by opening a new issue on github.com.
 
-### Links
+## Links
 - https://learn.microsoft.com/aspnet/core/fundamentals/error-handling-api
 - https://github.com/dotnet/aspnet-api-versioning

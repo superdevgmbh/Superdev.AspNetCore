@@ -11,7 +11,7 @@ namespace Superdev.AspNetCore.Tests.Extensions
         public void GetAssemblyVersion_WhenAssemblyHasVersion_ReturnsVersionString()
         {
             // Arrange
-            var assembly = CreateAssembly(new Version(1, 2, 3, 4));
+            var assembly = CreateAssembly(new System.Version(1, 2, 3, 4));
 
             // Act
             var result = assembly.GetAssemblyVersion();
@@ -93,7 +93,7 @@ namespace Superdev.AspNetCore.Tests.Extensions
             result.Should().BeNull();
         }
 
-        private static Assembly CreateAssembly(Version? version = null, string? informationalVersion = null)
+        private static Assembly CreateAssembly(System.Version? version = null, string? informationalVersion = null)
         {
             var assemblyName = new AssemblyName($"AssemblyExtensionsTests_{Guid.NewGuid():N}")
             {

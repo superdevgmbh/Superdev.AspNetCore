@@ -13,12 +13,13 @@ namespace Superdev.AspNetCore.Testing
         private readonly List<Action<WebHostBuilderContext, IConfigurationBuilder>> configureAppConfiguration = new List<Action<WebHostBuilderContext, IConfigurationBuilder>>();
         private readonly List<Action<IServiceCollection>> configureServices = new List<Action<IServiceCollection>>();
         private readonly List<Action<IServiceCollection>> configureTestServices = new List<Action<IServiceCollection>>();
+        private readonly List<Action<ILoggingBuilder>> configureLogging = new List<Action<ILoggingBuilder>>();
+        private string? environmentName;
 
         private WebApplicationFactory<TProgram>? factory;
 
         protected TestFixture()
         {
-            this.LoggerFactory = new LoggerFactory();
             this.InitializeInternal();
         }
 
@@ -78,6 +79,41 @@ namespace Superdev.AspNetCore.Testing
             return this;
         }
 
+        /// <summary>
+        /// Uses the specified ASP.NET Core environment for the test host.
+        /// </summary>
+        /// <param name="environment">The ASP.NET Core environment name.</param>
+        /// <returns>The current test fixture.</returns>
+        public TestFixture<TProgram> UseEnvironment(string environment)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(environment);
+
+            if (this.factory != null)
+            {
+                return this;
+            }
+
+            this.environmentName = environment;
+
+            return this;
+        }
+
+        /// <summary>
+        /// Configures the logging of the test host. Applied per host, so providers are disposed together
+        /// with the host instead of accumulating across <see cref="ResetFactory"/>.
+        /// </summary>
+        public TestFixture<TProgram> ConfigureLogging(Action<ILoggingBuilder> action)
+        {
+            if (this.factory != null)
+            {
+                return this;
+            }
+
+            this.configureLogging.Add(action);
+
+            return this;
+        }
+
         public TestFixture<TProgram> ConfigureTestService(Action<IServiceCollection> action)
         {
             if (this.factory != null)
@@ -110,6 +146,11 @@ namespace Superdev.AspNetCore.Testing
             this.factory = new WebApplicationFactory<TProgram>()
                 .WithWebHostBuilder(builder =>
                 {
+                    if (this.environmentName != null)
+                    {
+                        builder.UseEnvironment(this.environmentName);
+                    }
+
                     builder.ConfigureAppConfiguration((context, configurationBuilder) =>
                     {
                         foreach (var configure in this.configureAppConfiguration)
@@ -118,10 +159,16 @@ namespace Superdev.AspNetCore.Testing
                         }
                     });
 
+                    builder.ConfigureLogging(logging =>
+                    {
+                        foreach (var configure in this.configureLogging)
+                        {
+                            configure(logging);
+                        }
+                    });
+
                     builder.ConfigureServices(services =>
                     {
-                        services.AddSingleton<ILoggerFactory>(this.LoggerFactory);
-
                         foreach (var configure in this.configureServices)
                         {
                             configure(services);
@@ -156,13 +203,12 @@ namespace Superdev.AspNetCore.Testing
             return await action(scope.ServiceProvider);
         }
 
-        public LoggerFactory LoggerFactory { get; }
-
         public void ResetFactory()
         {
             this.configureAppConfiguration.Clear();
             this.configureServices.Clear();
             this.configureTestServices.Clear();
+            this.configureLogging.Clear();
 
             this.factory?.Dispose();
             this.factory = null;

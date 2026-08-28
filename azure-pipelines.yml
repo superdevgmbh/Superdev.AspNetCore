@@ -24,8 +24,8 @@ trigger:
 variables:
   buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
-  majorVersion: 2
-  minorVersion: 1
+  majorVersion: 1
+  minorVersion: 0
   patchVersion: $[counter(format('{0}.{1}', variables.majorVersion, variables.minorVersion), 0)]
   ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
     # Versioning: 1.0.0
@@ -81,14 +81,14 @@ steps:
   inputs:
     command: restore
     projects: |
-      Superdev.AspNetCore/**/*.csproj
+      Superdev.AspNetCore*/**/*.csproj
       **/*.Tests.csproj
 
 - task: DotNetCoreCLI@2
   displayName: 'Build solution'
   inputs:
     projects: |
-      Superdev.AspNetCore/**/*.csproj
+      Superdev.AspNetCore*/**/*.csproj
       **/*.Tests.csproj
     arguments: '--no-restore --configuration $(buildConfiguration)'
 
@@ -112,6 +112,15 @@ steps:
   inputs:
     command: pack
     packagesToPack: Superdev.AspNetCore/Superdev.AspNetCore.csproj
+    versioningScheme: byEnvVar
+    versionEnvVar: semVersion
+    nobuild: true
+    
+- task: DotNetCoreCLI@2
+  displayName: 'Pack Superdev.AspNetCore.Testing'
+  inputs:
+    command: pack
+    packagesToPack: Superdev.AspNetCore.Testing/Superdev.AspNetCore.Testing.csproj
     versioningScheme: byEnvVar
     versionEnvVar: semVersion
     nobuild: true

@@ -136,6 +136,16 @@ builder.Services.ConfigureWritable<MyFeatureOptions>(
     "appsettings.Development.json");
 ```
 
+If the section comes from a configuration root that is not the `IConfiguration` registered in DI (for example a root built in a `Startup` constructor), pass that root and the section name instead. After each write, writable options reload the configuration they hold; with the section overload that is the DI configuration, so a separately built root would keep the old file contents and roll the write back the next time the options are rebound.
+```csharp
+using Superdev.AspNetCore.Options;
+
+services.ConfigureWritable<MyFeatureOptions>(
+    this.Configuration,
+    "MyFeature",
+    "appsettings.myfeature.json");
+```
+
 Update options at runtime:
 ```csharp
 using Microsoft.AspNetCore.Mvc;
